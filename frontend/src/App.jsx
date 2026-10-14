@@ -1,3 +1,4 @@
+
 import { useLocation } from "react-router-dom";
 import {
   BrowserRouter,
@@ -7,6 +8,7 @@ import {
 
 import Footer from "./components/Footer";
 import Navbar from "./components/Navbar";
+import EmployeeLayout from "./components/EmployeeLayout";
 
 import About from "./pages/About";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -25,6 +27,8 @@ import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import Services from "./pages/Services";
 import WhyChooseUs from "./pages/WhyChooseUs";
+import Announcements from "./pages/Announcements";
+import Profile from "./pages/Profile";
 
 const INTERNAL_ROUTES = [
   "/login",
@@ -45,10 +49,7 @@ const INTERNAL_ROUTES = [
 
 function AppLayout() {
   const location = useLocation();
-
-  const isInternalPage = INTERNAL_ROUTES.includes(
-    location.pathname
-  );
+  const isInternalPage = INTERNAL_ROUTES.includes(location.pathname);
 
   return (
     <div className="min-h-screen bg-white">
@@ -65,30 +66,25 @@ function AppLayout() {
 
         {/* Authentication */}
         <Route path="/login" element={<Login />} />
-        <Route
-          path="/forgot-password"
-          element={<ForgotPassword />}
-        />
-        <Route
-          path="/reset-password"
-          element={<ResetPassword />}
-        />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* Employee Portal */}
-        <Route
-          path="/employee-dashboard"
-          element={<EmployeeDashboard />}
-        />
-        <Route path="/attendance" element={<Attendance />} />
-        <Route path="/leaves" element={<Leaves />} />
-        <Route path="/holidays" element={<Holidays />} />
-        <Route path="/calendar" element={<Calendar />} />
+        {/* Employee Portal: shared sidebar and header */}
+        <Route element={<EmployeeLayout />}>
+          <Route
+            path="/employee-dashboard"
+            element={<EmployeeDashboard />}
+          />
+          <Route path="/attendance" element={<Attendance />} />
+          <Route path="/leaves" element={<Leaves />} />
+          <Route path="/holidays" element={<Holidays />} />
+          <Route path="/calendar" element={<Calendar />} />
+          <Route path="/announcements" element={<Announcements />} />
+          <Route path="/profile" element={<Profile />} />
+        </Route>
 
         {/* Admin Portal */}
-        <Route
-          path="/admin-dashboard"
-          element={<AdminDashboard />}
-        />
+        <Route path="/admin-dashboard" element={<AdminDashboard />} />
         <Route
           path="/employee-management"
           element={<EmployeeManagement />}
@@ -102,12 +98,10 @@ function AppLayout() {
   );
 }
 
-function App() {
+export default function App() {
   return (
     <BrowserRouter>
       <AppLayout />
     </BrowserRouter>
   );
 }
-
-export default App;
