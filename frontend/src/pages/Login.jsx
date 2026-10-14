@@ -1,28 +1,23 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
-  Building2,
-  CheckCircle2,
+  ArrowRight,
   Eye,
   EyeOff,
-  Loader2,
   LockKeyhole,
+  Mail,
   ShieldCheck,
   UserRound,
 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = "http://127.0.0.1:8000";
 
 function Login() {
   const navigate = useNavigate();
 
   const [loginType, setLoginType] = useState("employee");
-
-  const [form, setForm] = useState({
-    login_id: "",
-    password: "",
-  });
+  const [loginId, setLoginId] = useState("");
+  const [password, setPassword] = useState("");
 
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -30,633 +25,340 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  function handleChange(event) {
-    const { name, value } = event.target;
-
-    setForm((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
-
-    setError("");
-  }
-
-  function handleLoginTypeChange(type) {
-    setLoginType(type);
-    setError("");
-
-    setForm({
-      login_id: "",
-      password: "",
-    });
-  }
-
-  async function handleSubmit(event) {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     setError("");
 
-    if (!form.login_id.trim()) {
-      setError(
-        loginType === "employee"
-          ? "Please enter your Employee ID or Email."
-          : "Please enter your Admin / Manager ID or Email."
-      );
-
+    if (!loginId.trim()) {
+      setError("Please enter your Employee ID or Email.");
       return;
     }
 
-    if (!form.password) {
+    if (!password) {
       setError("Please enter your password.");
       return;
     }
 
-    try {
-      setLoading(true);
+    setLoading(true);
 
+    try {
       const response = await fetch(
-        `${API_URL}/api/auth/login`,
+        `${API_BASE_URL}/api/auth/login`,
         {
           method: "POST",
-
           headers: {
             "Content-Type": "application/json",
           },
-
           body: JSON.stringify({
-            login_id: form.login_id.trim(),
-            password: form.password,
+            login_id: loginId.trim(),
+            password,
           }),
         }
       );
 
-      const data = await response
-        .json()
-        .catch(() => ({}));
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.detail ||
-            "Invalid login credentials."
+          data.detail || "Invalid login credentials."
         );
       }
 
-      const token = data.access_token;
       const user = data.user;
 
-      if (!token || !user) {
-        throw new Error(
-          "Login response is incomplete."
-        );
-      }
-
-      // ========================================================
-      // CLEAR PREVIOUS SESSION
-      // ========================================================
-
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("user");
-
-      sessionStorage.removeItem("access_token");
-      sessionStorage.removeItem("user");
-
-
-      // ========================================================
-      // VERIFY SELECTED LOGIN TYPE
-      //
-      // Employee tab -> employee only
-      // Admin tab    -> admin / manager only
-      // ========================================================
-
+      // Employee login tab
       if (
         loginType === "employee" &&
         user.role !== "employee"
       ) {
         throw new Error(
-          "This account is not an Employee account. Please use Admin / Manager Login."
+          "This account is not an Employee account. Please use Admin / Manager login."
         );
       }
 
+      // Admin / Manager login tab
       if (
         loginType === "admin" &&
-        user.role !== "admin" &&
-        user.role !== "manager"
+        !["admin", "manager"].includes(user.role)
       ) {
         throw new Error(
-          "This account does not have Admin / Manager access."
+          "This account is not an Admin / Manager account. Please use Employee login."
         );
       }
 
-
-      // ========================================================
-      // SAVE AUTHENTICATION
-      // ========================================================
-
       const storage = rememberMe
-        ? localStorage
-        : sessionStorage;
+        ? window.localStorage
+        : window.sessionStorage;
 
       storage.setItem(
         "access_token",
-        token
+        data.access_token
       );
 
       storage.setItem(
         "user",
-        JSON.stringify(user)
+        JSON.stringify(data.user)
       );
 
+      // Remove stale session from other storage.
+      const otherStorage = rememberMe
+        ? window.sessionStorage
+        : window.localStorage;
 
-      // ========================================================
-      // REDIRECT
-      // ========================================================
+      otherStorage.removeItem("access_token");
+      otherStorage.removeItem("user");
 
       if (
         user.role === "admin" ||
         user.role === "manager"
       ) {
-        navigate(
-          "/admin-dashboard",
-          {
-            replace: true,
-          }
-        );
-
-        return;
+        navigate("/admin-dashboard");
+      } else {
+        navigate("/employee-dashboard");
       }
-
-      if (user.role === "employee") {
-        navigate(
-          "/employee-dashboard",
-          {
-            replace: true,
-          }
-        );
-
-        return;
-      }
-
-      throw new Error(
-        "Your account does not have a valid access role."
-      );
-
-    } catch (err) {
+    } catch (error) {
       setError(
-        err.message ||
-          "Unable to login. Please try again."
+        error.message ||
+          "Something went wrong while logging in."
       );
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="min-h-screen bg-slate-950 pt-[88px]">
-
-      {/* ======================================================
-          TOP BACK BAR
-      ======================================================= */}
-
-      <div className="border-b border-slate-800 bg-slate-950">
-
-        <div className="mx-auto max-w-7xl px-6 py-5">
-
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 text-sm font-medium text-slate-400 transition hover:text-cyan-400"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Website
-          </Link>
-
-        </div>
-
-      </div>
-
-
-      {/* ======================================================
-          LOGIN SECTION
-      ======================================================= */}
-
-      <main className="relative overflow-hidden">
-
-        {/* BACKGROUND DECORATION */}
-
-        <div className="pointer-events-none absolute left-[-180px] top-[-180px] h-[500px] w-[500px] rounded-full bg-cyan-500/10 blur-3xl" />
-
-        <div className="pointer-events-none absolute bottom-[-200px] right-[-150px] h-[500px] w-[500px] rounded-full bg-blue-500/10 blur-3xl" />
-
-
-        <div className="relative mx-auto grid min-h-[calc(100vh-160px)] max-w-7xl items-center gap-12 px-6 py-14 lg:grid-cols-2">
-
-
-          {/* ==================================================
-              LEFT BRAND SECTION
-          =================================================== */}
-
-          <section className="hidden lg:block">
-
-            <div className="max-w-xl">
-
-              {/* BRAND */}
-
-              <div className="mb-8 inline-flex items-center gap-4">
-
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-700 bg-slate-900 shadow-xl">
-
-                  <img
-                    src="/logo.png"
-                    alt="LoanDPR Creditum Management"
-                    className="h-12 w-auto object-contain"
-                  />
-
-                </div>
-
-                <div>
-
-                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-400">
-                    Creditum Management
-                  </p>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    LoanDPR Creditum Management Pvt. Ltd.
-                  </p>
-
-                </div>
-
-              </div>
-
-
-              {/* HEADING */}
-
-              <h1 className="text-5xl font-bold leading-tight text-white">
-                Secure Employee
-                <span className="block text-cyan-400">
-                  Management Portal
-                </span>
-              </h1>
-
-              <p className="mt-6 max-w-lg text-lg leading-8 text-slate-400">
-                Access your employee workspace, attendance,
-                daily work, leave management and other
-                company services through one secure portal.
-              </p>
-
-
-              {/* FEATURES */}
-
-              <div className="mt-10 space-y-4">
-
-                <div className="flex items-center gap-4">
-
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400">
-                    <CheckCircle2 className="h-5 w-5" />
-                  </div>
-
-                  <div>
-                    <p className="font-semibold text-white">
-                      Secure Access
-                    </p>
-
-                    <p className="text-sm text-slate-500">
-                      Protected account-based authentication
-                    </p>
-                  </div>
-
-                </div>
-
-
-                <div className="flex items-center gap-4">
-
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400">
-                    <CheckCircle2 className="h-5 w-5" />
-                  </div>
-
-                  <div>
-                    <p className="font-semibold text-white">
-                      Employee Workspace
-                    </p>
-
-                    <p className="text-sm text-slate-500">
-                      Attendance, work and leave management
-                    </p>
-                  </div>
-
-                </div>
-
-
-                <div className="flex items-center gap-4">
-
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400">
-                    <ShieldCheck className="h-5 w-5" />
-                  </div>
-
-                  <div>
-                    <p className="font-semibold text-white">
-                      Role-Based Access
-                    </p>
-
-                    <p className="text-sm text-slate-500">
-                      Employee, Manager and Admin permissions
-                    </p>
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>
-
-          </section>
-
-
-          {/* ==================================================
-              LOGIN CARD
-          =================================================== */}
-
-          <section className="mx-auto w-full max-w-[500px]">
-
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/95 p-6 shadow-2xl shadow-black/30 backdrop-blur md:p-8">
-
-
-              {/* CARD HEADER */}
-
-              <div className="text-center">
-
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-400">
-
-                  {loginType === "employee" ? (
-                    <UserRound className="h-7 w-7" />
-                  ) : (
-                    <ShieldCheck className="h-7 w-7" />
-                  )}
-
-                </div>
-
-
-                <h2 className="mt-5 text-2xl font-bold text-white">
-                  Welcome Back
-                </h2>
-
-                <p className="mt-2 text-sm text-slate-400">
-                  Sign in to your company portal
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4 py-8">
+      <div className="w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-200">
+        <div className="grid lg:grid-cols-2">
+          {/* Left Side */}
+          <div className="hidden lg:flex bg-[#0b1f3a] text-white p-12 flex-col justify-between">
+            <div>
+              <img
+                src="/logo.png"
+                alt="LoanDPR Creditum Management"
+                className="w-48 h-auto object-contain"
+              />
+
+              <div className="mt-16">
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-300">
+                  Employee Management System
                 </p>
 
+                <h1 className="mt-5 text-4xl font-bold leading-tight">
+                  Welcome to your
+                  <span className="block text-blue-300">
+                    employee portal
+                  </span>
+                </h1>
+
+                <p className="mt-6 max-w-md text-slate-300 leading-7">
+                  Securely manage attendance, daily work,
+                  tasks, leaves, holidays and employee
+                  information from one place.
+                </p>
               </div>
+            </div>
 
+            <div className="flex items-center gap-3 text-sm text-slate-300">
+              <ShieldCheck className="w-5 h-5 text-blue-300" />
+              Secure company access
+            </div>
+          </div>
 
-              {/* =================================================
-                  LOGIN TYPE SWITCH
-              ================================================== */}
+          {/* Right Side */}
+          <div className="p-6 sm:p-10 lg:p-12">
+            <div className="lg:hidden mb-8">
+              <img
+                src="/logo.png"
+                alt="LoanDPR Creditum Management"
+                className="w-44 h-auto object-contain"
+              />
+            </div>
 
-              <div className="mt-7 rounded-2xl border border-slate-800 bg-slate-950 p-1.5">
+            <div>
+              <p className="text-sm font-semibold text-blue-700">
+                LoanDPR Creditum Management Pvt. Ltd.
+              </p>
 
-                <div className="grid grid-cols-2 gap-1">
+              <h2 className="mt-2 text-3xl font-bold text-slate-900">
+                Sign in
+              </h2>
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleLoginTypeChange(
-                        "employee"
-                      )
+              <p className="mt-2 text-slate-500">
+                Access your company account securely.
+              </p>
+            </div>
+
+            {/* Login Type */}
+            <div className="mt-8 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginType("employee");
+                  setError("");
+                }}
+                className={`rounded-lg px-4 py-3 text-sm font-semibold transition ${
+                  loginType === "employee"
+                    ? "bg-white text-[#0b1f3a] shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                Employee Login
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginType("admin");
+                  setError("");
+                }}
+                className={`rounded-lg px-4 py-3 text-sm font-semibold transition ${
+                  loginType === "admin"
+                    ? "bg-white text-[#0b1f3a] shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                Admin / Manager
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleSubmit}
+              className="mt-8 space-y-5"
+            >
+              {/* Login ID */}
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Employee ID or Email
+                </label>
+
+                <div className="relative">
+                  <UserRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+
+                  <input
+                    type="text"
+                    value={loginId}
+                    onChange={(event) =>
+                      setLoginId(event.target.value)
                     }
-                    className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                    placeholder={
                       loginType === "employee"
-                        ? "bg-cyan-500 text-slate-950 shadow-lg"
-                        : "text-slate-400 hover:text-white"
-                    }`}
+                        ? "Enter Employee ID or Email"
+                        : "Enter Admin ID or Email"
+                    }
+                    className="w-full rounded-xl border border-slate-300 bg-white py-3.5 pl-12 pr-4 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                    autoComplete="username"
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm font-semibold text-slate-700">
+                    Password
+                  </label>
+
+                  <Link
+                    to="/forgot-password"
+                    className="text-sm font-semibold text-blue-700 hover:text-blue-900"
                   >
-                    <UserRound className="h-4 w-4" />
+                    Forgot Password?
+                  </Link>
+                </div>
 
-                    Employee Login
-                  </button>
+                <div className="relative">
+                  <LockKeyhole className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
 
+                  <input
+                    type={
+                      showPassword
+                        ? "text"
+                        : "password"
+                    }
+                    value={password}
+                    onChange={(event) =>
+                      setPassword(event.target.value)
+                    }
+                    placeholder="Enter your password"
+                    className="w-full rounded-xl border border-slate-300 bg-white py-3.5 pl-12 pr-12 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                    autoComplete="current-password"
+                  />
 
                   <button
                     type="button"
                     onClick={() =>
-                      handleLoginTypeChange(
-                        "admin"
+                      setShowPassword(
+                        !showPassword
                       )
                     }
-                    className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition ${
-                      loginType === "admin"
-                        ? "bg-cyan-500 text-slate-950 shadow-lg"
-                        : "text-slate-400 hover:text-white"
-                    }`}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    aria-label={
+                      showPassword
+                        ? "Hide password"
+                        : "Show password"
+                    }
                   >
-                    <ShieldCheck className="h-4 w-4" />
-
-                    Admin / Manager
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
                   </button>
-
                 </div>
-
               </div>
 
+              {/* Remember */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(event) =>
+                    setRememberMe(
+                      event.target.checked
+                    )
+                  }
+                  className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-600"
+                />
 
-              {/* SELECTED ROLE TEXT */}
+                <span className="text-sm text-slate-600">
+                  Remember me on this device
+                </span>
+              </label>
 
-              <div className="mt-5 flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3">
-
-                <Building2 className="h-5 w-5 text-cyan-400" />
-
-                <div>
-
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Signing in as
-                  </p>
-
-                  <p className="mt-0.5 text-sm font-semibold text-white">
-                    {loginType === "employee"
-                      ? "Employee"
-                      : "Administrator / Manager"}
-                  </p>
-
-                </div>
-
-              </div>
-
-
-              {/* ERROR */}
-
+              {/* Error */}
               {error && (
-                <div className="mt-5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-300">
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
                   {error}
                 </div>
               )}
 
-
-              {/* =================================================
-                  LOGIN FORM
-              ================================================== */}
-
-              <form
-                onSubmit={handleSubmit}
-                className="mt-6 space-y-5"
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#0b1f3a] px-5 py-3.5 font-semibold text-white transition hover:bg-[#12345f] disabled:cursor-not-allowed disabled:opacity-60"
               >
+                {loading ? (
+                  "Signing in..."
+                ) : (
+                  <>
+                    Sign In
+                    <ArrowRight className="w-5 h-5" />
+                  </>
+                )}
+              </button>
+            </form>
 
-                {/* LOGIN ID */}
-
-                <div>
-
-                  <label
-                    htmlFor="login_id"
-                    className="mb-2 block text-sm font-semibold text-slate-300"
-                  >
-                    {loginType === "employee"
-                      ? "Employee ID or Email"
-                      : "Admin / Manager ID or Email"}
-                  </label>
-
-                  <input
-                    id="login_id"
-                    name="login_id"
-                    type="text"
-                    value={form.login_id}
-                    onChange={handleChange}
-                    placeholder={
-                      loginType === "employee"
-                        ? "Enter Employee ID or Email"
-                        : "Enter Admin / Manager ID or Email"
-                    }
-                    autoComplete="username"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3.5 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/10"
-                  />
-
-                </div>
-
-
-                {/* PASSWORD */}
-
-                <div>
-
-                  <label
-                    htmlFor="password"
-                    className="mb-2 block text-sm font-semibold text-slate-300"
-                  >
-                    Password
-                  </label>
-
-                  <div className="relative">
-
-                    <input
-                      id="password"
-                      name="password"
-                      type={
-                        showPassword
-                          ? "text"
-                          : "password"
-                      }
-                      value={form.password}
-                      onChange={handleChange}
-                      placeholder="Enter your password"
-                      autoComplete="current-password"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3.5 pr-12 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/10"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowPassword(
-                          (previous) =>
-                            !previous
-                        )
-                      }
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-slate-500 transition hover:bg-slate-800 hover:text-white"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-5 w-5" />
-                      ) : (
-                        <Eye className="h-5 w-5" />
-                      )}
-                    </button>
-
-                  </div>
-
-                </div>
-
-
-                {/* REMEMBER */}
-
-                <div className="flex items-center justify-between">
-
-                  <label className="flex cursor-pointer items-center gap-2">
-
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(event) =>
-                        setRememberMe(
-                          event.target.checked
-                        )
-                      }
-                      className="h-4 w-4 rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500"
-                    />
-
-                    <span className="text-sm text-slate-400">
-                      Remember me
-                    </span>
-
-                  </label>
-
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <LockKeyhole className="h-3.5 w-3.5" />
-                    Secure Login
-                  </div>
-
-                </div>
-
-
-                {/* LOGIN BUTTON */}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 px-5 py-3.5 font-bold text-slate-950 shadow-lg shadow-cyan-500/10 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-
-                  {loading && (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  )}
-
-                  {loading
-                    ? "Authenticating..."
-                    : loginType === "employee"
-                    ? "Login to Employee Portal"
-                    : "Login to Admin Portal"}
-
-                </button>
-
-              </form>
-
-
-              {/* BOTTOM INFO */}
-
-              <div className="mt-7 border-t border-slate-800 pt-5 text-center">
-
-                <p className="text-xs leading-5 text-slate-500">
-                  Account credentials are provided and
-                  managed by authorized company personnel.
-                </p>
-
-                <Link
-                  to="/contact"
-                  className="mt-2 inline-block text-sm font-semibold text-cyan-400 hover:text-cyan-300"
-                >
-                  Contact Administration
-                </Link>
-
-              </div>
-
+            <div className="mt-8 flex items-center gap-3 text-xs text-slate-400">
+              <Mail className="w-4 h-4" />
+              For account access issues, contact your
+              company administrator.
             </div>
-
-          </section>
-
+          </div>
         </div>
-
-      </main>
-
+      </div>
     </div>
   );
 }

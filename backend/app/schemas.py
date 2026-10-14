@@ -1,8 +1,13 @@
+
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
+
+# ============================================================
+# AUTHENTICATION
+# ============================================================
 
 class RegisterRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=150)
@@ -18,6 +23,21 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    reset_token: str = Field(min_length=20, max_length=500)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class UserResponse(BaseModel):
     id: int
     full_name: str
@@ -26,10 +46,10 @@ class UserResponse(BaseModel):
     mobile: str | None
     role: str
     department: str | None
+    date_of_birth: date | None = None
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TokenResponse(BaseModel):
@@ -38,6 +58,55 @@ class TokenResponse(BaseModel):
     user: UserResponse
 
 
+# ============================================================
+# ADMIN EMPLOYEE MANAGEMENT
+# ============================================================
+
+class EmployeeCreateRequest(BaseModel):
+    full_name: str = Field(min_length=2, max_length=150)
+    employee_id: str = Field(min_length=2, max_length=50)
+    email: EmailStr
+    mobile: str | None = Field(default=None, max_length=20)
+    department: str | None = Field(default=None, max_length=100)
+    date_of_birth: date | None = None
+    password: str = Field(min_length=8, max_length=128)
+
+
+class EmployeeUpdateRequest(BaseModel):
+    full_name: str = Field(min_length=2, max_length=150)
+    email: EmailStr
+    mobile: str | None = Field(default=None, max_length=20)
+    department: str | None = Field(default=None, max_length=100)
+    date_of_birth: date | None = None
+
+
+class EmployeeStatusUpdate(BaseModel):
+    is_active: bool
+
+
+class EmployeePasswordUpdate(BaseModel):
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class EmployeeResponse(UserResponse):
+    created_at: datetime
+
+
+# ============================================================
+# EMPLOYEE PROFILE
+# ============================================================
+
+class EmployeeProfileUpdateRequest(BaseModel):
+    full_name: str = Field(min_length=2, max_length=150)
+    email: EmailStr
+    mobile: str | None = Field(default=None, max_length=20)
+    date_of_birth: date | None = None
+
+
+# ============================================================
+# ATTENDANCE
+# ============================================================
+
 class AttendanceResponse(BaseModel):
     id: int
     attendance_date: date
@@ -45,9 +114,12 @@ class AttendanceResponse(BaseModel):
     check_out: datetime | None
     status: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
+
+# ============================================================
+# TASKS
+# ============================================================
 
 class TaskResponse(BaseModel):
     id: int
@@ -58,40 +130,36 @@ class TaskResponse(BaseModel):
     status: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TaskCreateRequest(BaseModel):
     employee_id: int = Field(gt=0)
     title: str = Field(min_length=2, max_length=255)
-    description: str | None = Field(
-        default=None,
-        max_length=2000,
-    )
+    description: str | None = Field(default=None, max_length=2000)
     task_date: date
 
 
 class TaskUpdateRequest(BaseModel):
     title: str = Field(min_length=2, max_length=255)
-    description: str | None = Field(
-        default=None,
-        max_length=2000,
-    )
+    description: str | None = Field(default=None, max_length=2000)
     task_date: date
-    status: Literal[
-        "Pending",
-        "In Progress",
-        "Completed",
-    ]
+    status: Literal["Pending", "In Progress", "Completed"]
 
 
 class TaskStatusUpdate(BaseModel):
-    status: Literal[
-        "Pending",
-        "In Progress",
-        "Completed",
-    ]
+    status: Literal["Pending", "In Progress", "Completed"]
+
+
+# ============================================================
+# LEAVES
+# ============================================================
+
+class LeaveCreateRequest(BaseModel):
+    from_date: date
+    to_date: date
+    leave_type: str = Field(min_length=2, max_length=50)
+    reason: str | None = Field(default=None, max_length=2000)
 
 
 class LeaveResponse(BaseModel):
@@ -102,8 +170,24 @@ class LeaveResponse(BaseModel):
     reason: str | None
     status: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminLeaveResponse(BaseModel):
+    id: int
+    employee_id: int
+    employee_name: str | None
+    employee_code: str | None
+    from_date: date
+    to_date: date
+    leave_type: str
+    reason: str | None
+    status: str
+    created_at: datetime
+
+
+class LeaveStatusUpdate(BaseModel):
+    status: Literal["Approved", "Rejected"]
 
 
 class LeaveBalanceResponse(BaseModel):
@@ -111,9 +195,12 @@ class LeaveBalanceResponse(BaseModel):
     annual_leave: int
     used_leave: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
+
+# ============================================================
+# HOLIDAYS
+# ============================================================
 
 class HolidayResponse(BaseModel):
     id: int
@@ -121,9 +208,24 @@ class HolidayResponse(BaseModel):
     name: str
     description: str | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
+
+class HolidayCreateRequest(BaseModel):
+    holiday_date: date
+    name: str = Field(min_length=1, max_length=150)
+    description: str | None = Field(default=None, max_length=2000)
+
+
+class HolidayUpdateRequest(BaseModel):
+    holiday_date: date
+    name: str = Field(min_length=1, max_length=150)
+    description: str | None = Field(default=None, max_length=2000)
+
+
+# ============================================================
+# EMPLOYEE CALENDAR
+# ============================================================
 
 class CalendarAttendance(BaseModel):
     date: date
@@ -162,6 +264,10 @@ class EmployeeCalendarResponse(BaseModel):
     holidays: list[CalendarHoliday]
 
 
+# ============================================================
+# EMPLOYEE DASHBOARD
+# ============================================================
+
 class EmployeeDashboardResponse(BaseModel):
     user: UserResponse
     today: date
@@ -170,3 +276,70 @@ class EmployeeDashboardResponse(BaseModel):
     leave_requests: list[LeaveResponse]
     upcoming_holidays: list[HolidayResponse]
     leave_balance: LeaveBalanceResponse | None
+
+
+# ============================================================
+# ANNOUNCEMENTS
+# ============================================================
+
+class AnnouncementCreateRequest(BaseModel):
+    title: str = Field(min_length=2, max_length=200)
+    content: str = Field(min_length=1, max_length=10000)
+
+
+class AnnouncementUpdateRequest(BaseModel):
+    title: str = Field(min_length=2, max_length=200)
+    content: str = Field(min_length=1, max_length=10000)
+    is_active: bool = True
+
+
+class AnnouncementResponse(BaseModel):
+    id: int
+    title: str
+    content: str
+    created_by: int | None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    is_read: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AnnouncementListResponse(BaseModel):
+    announcements: list[AnnouncementResponse]
+    unread_count: int
+
+
+# ============================================================
+# ACTIVITY FEED
+# ============================================================
+
+class ActivityResponse(BaseModel):
+    id: int
+    actor_id: int | None
+    employee_id: int | None
+    event_type: str
+    title: str
+    description: str
+    is_admin_notice: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================
+# BIRTHDAYS
+# ============================================================
+
+class BirthdayEmployeeResponse(BaseModel):
+    id: int
+    full_name: str
+    employee_id: str
+    department: str | None
+    date_of_birth: date
+
+
+class BirthdayListResponse(BaseModel):
+    today: date
+    birthdays: list[BirthdayEmployeeResponse]

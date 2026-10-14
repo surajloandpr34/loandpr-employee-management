@@ -3,13 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import models
 from .database import Base, engine
+from .routes.admin import router as admin_router
 from .routes.auth import router as auth_router
 from .routes.employee import router as employee_router
+from .routes.leaves import router as leaves_router
 
 
-Base.metadata.create_all(
-    bind=engine
-)
+Base.metadata.create_all(bind=engine)
 
 
 app = FastAPI(
@@ -34,10 +34,7 @@ app.add_middleware(
 @app.get("/")
 def root():
     return {
-        "message": (
-            "LoanDPR Creditum "
-            "Employee Management API"
-        ),
+        "message": "LoanDPR Creditum Employee Management API",
         "status": "running",
     }
 
@@ -45,14 +42,11 @@ def root():
 @app.get("/api/health")
 def health():
     return {
-        "status": "healthy",
+        "status": "healthy"
     }
 
 
-app.include_router(
-    auth_router
-)
-
-app.include_router(
-    employee_router
-)
+app.include_router(auth_router)
+app.include_router(employee_router)
+app.include_router(leaves_router)
+app.include_router(admin_router)

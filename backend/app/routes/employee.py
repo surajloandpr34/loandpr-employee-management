@@ -1,12 +1,17 @@
+
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import extract, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import (
+    ActivityLog,
+    Announcement,
+    AnnouncementRead,
     Attendance,
     Holiday,
     LeaveBalance,
@@ -15,9 +20,15 @@ from ..models import (
     User,
 )
 from ..schemas import (
+    ActivityResponse,
+    AnnouncementListResponse,
+    AnnouncementResponse,
     AttendanceResponse,
+    BirthdayEmployeeResponse,
+    BirthdayListResponse,
     EmployeeCalendarResponse,
     EmployeeDashboardResponse,
+    EmployeeProfileUpdateRequest,
 )
 from ..security import get_current_user
 
@@ -37,6 +48,32 @@ def get_today() -> date:
 def get_current_local_datetime() -> datetime:
     return datetime.now(IST).replace(tzinfo=None)
 
+
+def log_activity(
+    db: Session,
+    *,
+    actor_id: int | None,
+    employee_id: int | None,
+    event_type: str,
+    title: str,
+    description: str,
+    is_admin_notice: bool = False,
+) -> None:
+    db.add(
+        ActivityLog(
+            actor_id=actor_id,
+            employee_id=employee_id,
+            event_type=event_type,
+            title=title,
+            description=description,
+            is_admin_notice=is_admin_notice,
+        )
+    )
+
+
+# ============================================================
+# DASHBOARD
+# ============================================================
 
 @router.get(
     "/dashboard",
@@ -68,9 +105,7 @@ def employee_dashboard(
 
     leave_requests = db.scalars(
         select(LeaveRequest)
-        .where(
-            LeaveRequest.employee_id == current_user.id,
-        )
+        .where(LeaveRequest.employee_id == current_user.id)
         .order_by(LeaveRequest.created_at.desc())
         .limit(10)
     ).all()
@@ -101,6 +136,315 @@ def employee_dashboard(
         "leave_balance": leave_balance,
     }
 
+
+# ============================================================
+# EMPLOYEE PROFILE
+# ============================================================
+
+@router.get("/profile")
+def get_employee_profile(
+    current_user: User = Depends(get_current_user),
+):
+    return {
+        "id": current_user.id,
+        "full_name": current_user.full_name,
+        "employee_id": current_user.employee_id,
+        "email": current_user.email,
+        "mobile": current_user.mobile,
+        "department": current_user.department,
+        "role": current_user.role,
+        "date_of_birth": current_user.date_of_birth,
+        "is_active": current_user.is_active,
+        "created_at": current_user.created_at,
+    }
+
+
+@router.put("/profile")
+def update_employee_profile(
+    request: EmployeeProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role not in ("employee", "manager", "admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not allowed to update this profile.",
+        )
+
+    email = str(request.email).strip().lower()
+
+    existing_email = db.scalar(
+        select(User).where(
+            func.lower(User.email) == email,
+            User.id != current_user.id,
+        )
+    )
+
+    if existing_email:
+        raise HTTPException(
+            status_code=409,
+            detail="This email address is already in use.",
+        )
+
+    if request.date_of_birth and request.date_of_birth > get_today():
+        raise HTTPException(
+            status_code=400,
+            detail="Date of birth cannot be in the future.",
+        )
+
+    changes = []
+
+    if current_user.full_name != request.full_name.strip():
+        changes.append("name")
+    if (current_user.email or "").lower() != email:
+        changes.append("email")
+    if current_user.mobile != (
+        request.mobile.strip()
+        if request.mobile and request.mobile.strip()
+        else None
+    ):
+        changes.append("mobile")
+    if current_user.date_of_birth != request.date_of_birth:
+        changes.append("date of birth")
+
+    current_user.full_name = request.full_name.strip()
+    current_user.email = email
+    current_user.mobile = (
+        request.mobile.strip()
+        if request.mobile and request.mobile.strip()
+        else None
+    )
+    current_user.date_of_birth = request.date_of_birth
+
+    if changes:
+        log_activity(
+            db,
+            actor_id=current_user.id,
+            employee_id=current_user.id,
+            event_type="profile_updated",
+            title="Profile updated",
+            description=(
+                f"{current_user.full_name} updated: "
+                + ", ".join(changes)
+                + "."
+            ),
+            is_admin_notice=current_user.role == "admin",
+        )
+
+    try:
+        db.commit()
+        db.refresh(current_user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Could not update profile. Check the email address.",
+        )
+
+    return {
+        "id": current_user.id,
+        "full_name": current_user.full_name,
+        "employee_id": current_user.employee_id,
+        "email": current_user.email,
+        "mobile": current_user.mobile,
+        "department": current_user.department,
+        "role": current_user.role,
+        "date_of_birth": current_user.date_of_birth,
+        "is_active": current_user.is_active,
+        "created_at": current_user.created_at,
+    }
+
+
+# ============================================================
+# BIRTHDAYS
+# ============================================================
+
+@router.get(
+    "/birthdays",
+    response_model=BirthdayListResponse,
+)
+def get_birthdays(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    today = get_today()
+
+    birthdays = db.scalars(
+        select(User)
+        .where(
+            User.role == "employee",
+            User.is_active.is_(True),
+            User.date_of_birth.is_not(None),
+            extract("month", User.date_of_birth) == today.month,
+            extract("day", User.date_of_birth) == today.day,
+        )
+        .order_by(User.full_name.asc())
+    ).all()
+
+    return {
+        "today": today,
+        "birthdays": [
+            {
+                "id": employee.id,
+                "full_name": employee.full_name,
+                "employee_id": employee.employee_id,
+                "department": employee.department,
+                "date_of_birth": employee.date_of_birth,
+            }
+            for employee in birthdays
+        ],
+    }
+
+
+# ============================================================
+# ANNOUNCEMENTS
+# ============================================================
+
+@router.get(
+    "/announcements",
+    response_model=AnnouncementListResponse,
+)
+def get_announcements(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    announcements = db.scalars(
+        select(Announcement)
+        .where(Announcement.is_active.is_(True))
+        .order_by(Announcement.created_at.desc())
+    ).all()
+
+    read_ids = set(
+        db.scalars(
+            select(AnnouncementRead.announcement_id).where(
+                AnnouncementRead.employee_id == current_user.id
+            )
+        ).all()
+    )
+
+    results = []
+    unread_count = 0
+
+    for announcement in announcements:
+        is_read = announcement.id in read_ids
+
+        if not is_read:
+            unread_count += 1
+
+        results.append({
+            "id": announcement.id,
+            "title": announcement.title,
+            "content": announcement.content,
+            "created_by": announcement.created_by,
+            "is_active": announcement.is_active,
+            "created_at": announcement.created_at,
+            "updated_at": announcement.updated_at,
+            "is_read": is_read,
+        })
+
+    return {
+        "announcements": results,
+        "unread_count": unread_count,
+    }
+
+
+@router.post("/announcements/{announcement_id}/read")
+def mark_announcement_read(
+    announcement_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    announcement = db.scalar(
+        select(Announcement).where(
+            Announcement.id == announcement_id,
+            Announcement.is_active.is_(True),
+        )
+    )
+
+    if not announcement:
+        raise HTTPException(
+            status_code=404,
+            detail="Announcement not found.",
+        )
+
+    existing = db.scalar(
+        select(AnnouncementRead).where(
+            AnnouncementRead.announcement_id == announcement_id,
+            AnnouncementRead.employee_id == current_user.id,
+        )
+    )
+
+    if not existing:
+        db.add(
+            AnnouncementRead(
+                announcement_id=announcement_id,
+                employee_id=current_user.id,
+                read_at=get_current_local_datetime(),
+            )
+        )
+
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+
+    unread_count = db.scalar(
+        select(func.count(Announcement.id))
+        .where(
+            Announcement.is_active.is_(True),
+            ~Announcement.id.in_(
+                select(AnnouncementRead.announcement_id).where(
+                    AnnouncementRead.employee_id == current_user.id
+                )
+            ),
+        )
+    ) or 0
+
+    return {
+        "message": "Announcement marked as read.",
+        "unread_count": unread_count,
+    }
+
+
+# ============================================================
+# ACTIVITY FEED
+# ============================================================
+
+@router.get(
+    "/activity",
+    response_model=list[ActivityResponse],
+)
+def get_employee_activity(
+    limit: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    limit = max(1, min(limit, 100))
+
+    # Employee-visible events:
+    # - events explicitly related to this employee
+    # - company-wide admin notices
+    activities = db.scalars(
+        select(ActivityLog)
+        .where(
+            (
+                ActivityLog.employee_id == current_user.id
+            )
+            | (
+                ActivityLog.is_admin_notice.is_(True)
+                & ActivityLog.employee_id.is_(None)
+            )
+        )
+        .order_by(ActivityLog.created_at.desc())
+        .limit(limit)
+    ).all()
+
+    return activities
+
+
+# ============================================================
+# ATTENDANCE CHECK-IN
+# ============================================================
 
 @router.post(
     "/attendance/check-in",
@@ -133,11 +477,25 @@ def check_in(
     )
 
     db.add(attendance)
+
+    log_activity(
+        db,
+        actor_id=current_user.id,
+        employee_id=current_user.id,
+        event_type="attendance_check_in",
+        title="Attendance check-in",
+        description=f"{current_user.full_name} checked in.",
+    )
+
     db.commit()
     db.refresh(attendance)
 
     return attendance
 
+
+# ============================================================
+# ATTENDANCE CHECK-OUT
+# ============================================================
 
 @router.post(
     "/attendance/check-out",
@@ -156,13 +514,7 @@ def check_out(
         )
     )
 
-    if not attendance:
-        raise HTTPException(
-            status_code=400,
-            detail="Please check in before checking out.",
-        )
-
-    if not attendance.check_in:
+    if not attendance or not attendance.check_in:
         raise HTTPException(
             status_code=400,
             detail="Please check in before checking out.",
@@ -176,15 +528,26 @@ def check_out(
 
     attendance.check_out = get_current_local_datetime()
 
+    log_activity(
+        db,
+        actor_id=current_user.id,
+        employee_id=current_user.id,
+        event_type="attendance_check_out",
+        title="Attendance check-out",
+        description=f"{current_user.full_name} checked out.",
+    )
+
     db.commit()
     db.refresh(attendance)
 
     return attendance
 
 
-@router.get(
-    "/holidays",
-)
+# ============================================================
+# HOLIDAYS
+# ============================================================
+
+@router.get("/holidays")
 def get_employee_holidays(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -193,9 +556,7 @@ def get_employee_holidays(
 
     holidays = db.scalars(
         select(Holiday)
-        .where(
-            Holiday.is_active.is_(True),
-        )
+        .where(Holiday.is_active.is_(True))
         .order_by(Holiday.holiday_date.asc())
     ).all()
 
@@ -204,6 +565,10 @@ def get_employee_holidays(
         "holidays": holidays,
     }
 
+
+# ============================================================
+# EMPLOYEE CALENDAR
+# ============================================================
 
 @router.get(
     "/calendar",
@@ -215,93 +580,69 @@ def get_employee_calendar(
 ):
     today = get_today()
 
-    # --------------------------------------------------------
-    # Attendance
-    # --------------------------------------------------------
-
     attendance_records = db.scalars(
         select(Attendance)
-        .where(
-            Attendance.employee_id == current_user.id,
-        )
+        .where(Attendance.employee_id == current_user.id)
         .order_by(Attendance.attendance_date.asc())
     ).all()
 
     attendance_data = [
         {
-            "date": attendance.attendance_date,
-            "status": attendance.status,
-            "check_in": attendance.check_in,
-            "check_out": attendance.check_out,
+            "date": item.attendance_date,
+            "status": item.status,
+            "check_in": item.check_in,
+            "check_out": item.check_out,
         }
-        for attendance in attendance_records
+        for item in attendance_records
     ]
-
-    # --------------------------------------------------------
-    # Tasks
-    # --------------------------------------------------------
 
     task_records = db.scalars(
         select(Task)
-        .where(
-            Task.employee_id == current_user.id,
-        )
+        .where(Task.employee_id == current_user.id)
         .order_by(Task.task_date.asc(), Task.id.asc())
     ).all()
 
     task_data = [
         {
-            "id": task.id,
-            "date": task.task_date,
-            "title": task.title,
-            "status": task.status,
+            "id": item.id,
+            "date": item.task_date,
+            "title": item.title,
+            "status": item.status,
         }
-        for task in task_records
+        for item in task_records
     ]
-
-    # --------------------------------------------------------
-    # Leaves
-    # --------------------------------------------------------
 
     leave_records = db.scalars(
         select(LeaveRequest)
-        .where(
-            LeaveRequest.employee_id == current_user.id,
-        )
+        .where(LeaveRequest.employee_id == current_user.id)
         .order_by(LeaveRequest.from_date.asc())
     ).all()
 
     leave_data = [
         {
-            "id": leave.id,
-            "from_date": leave.from_date,
-            "to_date": leave.to_date,
-            "leave_type": leave.leave_type,
-            "status": leave.status,
+            "id": item.id,
+            "from_date": item.from_date,
+            "to_date": item.to_date,
+            "leave_type": item.leave_type,
+            "status": item.status,
         }
-        for leave in leave_records
+        for item in leave_records
     ]
-
-    # --------------------------------------------------------
-    # Company Holidays
-    # --------------------------------------------------------
 
     holiday_records = db.scalars(
         select(Holiday)
-        .where(
-            Holiday.is_active.is_(True),
-        )
+        .where(Holiday.is_active.is_(True))
         .order_by(Holiday.holiday_date.asc())
     ).all()
 
     holiday_data = [
         {
-            "id": holiday.id,
-            "date": holiday.holiday_date,
-            "name": holiday.name,
-            "description": holiday.description,
+            "id": item.id,
+            "date": item.holiday_date,
+            "name": item.name,
+            "description": item.description,
         }
-        for holiday in holiday_records
+        for item in holiday_records
     ]
 
     return {
