@@ -12,7 +12,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 const menuItems = [
   { label: "Dashboard", path: "/employee-dashboard", icon: Home },
@@ -39,7 +39,9 @@ function readUser() {
 
 export default function EmployeeLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const user = readUser();
+  const isDashboard = location.pathname === "/employee-dashboard";
   const [mobileOpen, setMobileOpen] = useState(false);
 
   function logout() {
@@ -213,8 +215,8 @@ export default function EmployeeLayout() {
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto">
-          <div className="min-h-full p-4 sm:p-6 lg:p-8">
+        <main className={`min-h-0 flex-1 ${isDashboard ? "overflow-y-auto" : "overflow-hidden"}`}>
+          <div className={`${isDashboard ? "min-h-full" : "h-full min-h-0"} p-4 sm:p-6 lg:p-8 ${isDashboard ? "" : "overflow-hidden"}`}>
             <Outlet />
           </div>
         </main>
