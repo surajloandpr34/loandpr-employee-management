@@ -1,16 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
-  Bell,
   CalendarCheck2,
-  CalendarDays,
   Clock3,
-  FileText,
-  Home,
-  LogOut,
-  Menu,
-  UserRound,
-  X,
 } from "lucide-react";
 
 const API_URL = "http://127.0.0.1:8000";
@@ -154,29 +146,6 @@ function calculateWorkingDuration(checkIn, checkOut) {
   const minutes = totalMinutes % 60;
 
   return `${hours}h ${minutes}m`;
-}
-
-function SidebarItem({
-  icon: Icon,
-  label,
-  to,
-  active = false,
-  onClick,
-}) {
-  return (
-    <Link
-      to={to}
-      onClick={onClick}
-      className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
-        active
-          ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/20"
-          : "text-slate-300 hover:bg-white/10 hover:text-white"
-      }`}
-    >
-      <Icon className="h-5 w-5 shrink-0" />
-      <span>{label}</span>
-    </Link>
-  );
 }
 
 function Attendance() {
@@ -340,178 +309,8 @@ function Attendance() {
   const hasCheckedOut = Boolean(attendance?.check_out);
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      {/* Mobile Overlay */}
-      {mobileSidebarOpen && (
-        <button
-          type="button"
-          aria-label="Close sidebar"
-          onClick={closeMobileSidebar}
-          className="fixed inset-0 z-40 bg-slate-950/60 lg:hidden"
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`fixed left-0 top-0 z-50 flex h-screen w-[270px] flex-col bg-[#071a36] transition-transform duration-300 ${
-          mobileSidebarOpen
-            ? "translate-x-0"
-            : "-translate-x-full lg:translate-x-0"
-        }`}
-      >
-        <div className="flex h-[88px] items-center justify-between border-b border-white/10 px-6">
-          <Link
-            to="/employee-dashboard"
-            onClick={closeMobileSidebar}
-            className="flex items-center"
-          >
-            <img
-              src="/logo.png"
-              alt="LoanDPR Creditum Management"
-              className="h-14 w-auto object-contain"
-            />
-          </Link>
-
-          <button
-            type="button"
-            onClick={closeMobileSidebar}
-            className="rounded-lg p-2 text-slate-300 hover:bg-white/10 lg:hidden"
-            aria-label="Close menu"
-          >
-            <X className="h-6 w-6" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-4 py-6">
-          <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Main Menu
-          </p>
-
-          <nav className="space-y-1">
-            <SidebarItem
-              icon={Home}
-              label="Dashboard"
-              to="/employee-dashboard"
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={FileText}
-              label="My Tasks"
-              to="/tasks"
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={CalendarCheck2}
-              label="Attendance"
-              to="/attendance"
-              active
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={CalendarDays}
-              label="Leaves"
-              to="/leaves"
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={CalendarDays}
-              label="Holidays"
-              to="/holidays"
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={CalendarDays}
-              label="Calendar"
-              to="/calendar"
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={Bell}
-              label="Announcements"
-              to="/announcements"
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={UserRound}
-              label="Profile"
-              to="/profile"
-              onClick={closeMobileSidebar}
-            />
-          </nav>
-        </div>
-
-        <div className="border-t border-white/10 p-4">
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-red-500/10 hover:text-red-300"
-          >
-            <LogOut className="h-5 w-5" />
-            Logout
-          </button>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <main className="min-h-screen lg:ml-[270px]">
-        {/* Header */}
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-          <div className="flex h-[88px] items-center justify-between px-5 md:px-8">
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                onClick={() => setMobileSidebarOpen(true)}
-                className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-700 lg:hidden"
-                aria-label="Open menu"
-              >
-                <Menu className="h-6 w-6" />
-              </button>
-
-              <div>
-                <p className="text-sm font-medium text-slate-500">
-                  Employee Portal
-                </p>
-
-                <h1 className="text-xl font-bold text-slate-900 md:text-2xl">
-                  Attendance
-                </h1>
-              </div>
-            </div>
-
-            <div className="hidden items-center gap-3 sm:flex">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
-                <div className="flex items-center gap-2">
-                  <Clock3 className="h-4 w-4 text-cyan-600" />
-
-                  <span className="text-sm font-medium text-slate-600">
-                    {today
-                      ? formatLongDate(today)
-                      : "Loading..."}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="relative rounded-xl border border-slate-200 bg-white p-3 text-slate-600 transition hover:border-cyan-300 hover:text-cyan-600"
-                aria-label="Notifications"
-              >
-                <Bell className="h-5 w-5" />
-
-                <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-cyan-500" />
-              </button>
-            </div>
-          </div>
-        </header>
-
-        <div className="p-5 md:p-8">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
           {/* Intro */}
           <section className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#071a36] to-[#0b3158] p-6 text-white shadow-lg md:p-8">
             <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
@@ -938,8 +737,7 @@ function Attendance() {
               </section>
             </>
           )}
-        </div>
-      </main>
+      </div>
     </div>
   );
 }
