@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -24,6 +25,7 @@ const EMPTY_FORM = {
   email: "",
   mobile: "",
   department: "",
+  date_of_birth: "",
   password: "",
 };
 
@@ -58,6 +60,20 @@ function getErrorMessage(data, fallback) {
   }
 
   return fallback;
+}
+
+function formatDate(dateValue) {
+  if (!dateValue) return "Not provided";
+
+  const date = new Date(`${dateValue}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) return "Not provided";
+
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export default function EmployeeManagement() {
@@ -107,14 +123,11 @@ export default function EmployeeManagement() {
     setError("");
 
     try {
-      const response = await fetch(
-        `${API_URL}/api/admin/employees`,
-        {
-          headers: {
-            Authorization: `Bearer ${currentAuth.token}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_URL}/api/admin/employees`, {
+        headers: {
+          Authorization: `Bearer ${currentAuth.token}`,
+        },
+      });
 
       const data = await response.json().catch(() => null);
 
@@ -163,6 +176,7 @@ export default function EmployeeManagement() {
       email: employee.email || "",
       mobile: employee.mobile || "",
       department: employee.department || "",
+      date_of_birth: employee.date_of_birth || "",
       password: "",
     });
 
@@ -209,11 +223,24 @@ export default function EmployeeManagement() {
       return;
     }
 
+    const today = new Date();
+    const todayString = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, "0"),
+      String(today.getDate()).padStart(2, "0"),
+    ].join("-");
+
+    if (form.date_of_birth && form.date_of_birth > todayString) {
+      setError("Date of Birth future date nahi ho sakti.");
+      return;
+    }
+
     const payload = {
       full_name: form.full_name.trim(),
       email: form.email.trim(),
       mobile: form.mobile.trim() || null,
       department: form.department.trim() || null,
+      date_of_birth: form.date_of_birth || null,
     };
 
     let endpoint = `${API_URL}/api/admin/employees`;
@@ -323,9 +350,7 @@ export default function EmployeeManagement() {
         );
       }
 
-      setSuccess(
-        `${employee.full_name} ka account ${action} ho gaya.`
-      );
+      setSuccess(`${employee.full_name} ka account ${action} ho gaya.`);
 
       await loadEmployees();
     } catch (err) {
@@ -405,6 +430,7 @@ export default function EmployeeManagement() {
       employee.email,
       employee.department,
       employee.mobile,
+      employee.date_of_birth,
     ].some((value) =>
       String(value || "").toLowerCase().includes(query)
     );
@@ -491,10 +517,7 @@ export default function EmployeeManagement() {
         {error && (
           <div className="mb-5 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             <p>{error}</p>
-            <button
-              onClick={() => setError("")}
-              aria-label="Dismiss error"
-            >
+            <button onClick={() => setError("")} aria-label="Dismiss error">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -503,10 +526,7 @@ export default function EmployeeManagement() {
         {success && (
           <div className="mb-5 flex items-start justify-between gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
             <p>{success}</p>
-            <button
-              onClick={() => setSuccess("")}
-              aria-label="Dismiss success"
-            >
+            <button onClick={() => setSuccess("")} aria-label="Dismiss success">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -583,13 +603,14 @@ export default function EmployeeManagement() {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1000px] text-left">
+                <table className="w-full min-w-[1100px] text-left">
                   <thead className="bg-slate-50">
                     <tr>
                       {[
                         "Employee",
                         "Employee ID",
                         "Department",
+                        "Date of Birth",
                         "Contact",
                         "Status",
                         "Actions",
@@ -636,6 +657,10 @@ export default function EmployeeManagement() {
 
                         <td className="px-5 py-4 text-sm text-slate-600">
                           {employee.department || "Not assigned"}
+                        </td>
+
+                        <td className="px-5 py-4 text-sm text-slate-600">
+                          {formatDate(employee.date_of_birth)}
                         </td>
 
                         <td className="px-5 py-4 text-sm text-slate-600">
@@ -687,9 +712,7 @@ export default function EmployeeManagement() {
                                   ? "Deactivate employee"
                                   : "Activate employee"
                               }
-                              onClick={() =>
-                                toggleEmployeeStatus(employee)
-                              }
+                              onClick={() => toggleEmployeeStatus(employee)}
                               disabled={saving}
                             >
                               {employee.is_active ? (
@@ -784,6 +807,20 @@ export default function EmployeeManagement() {
                 className={inputClass}
                 placeholder="Example: Accounts"
               />
+            </FormField>
+
+            <FormField label="Date of Birth">
+              <input
+                name="date_of_birth"
+                type="date"
+                value={form.date_of_birth}
+                onChange={updateForm}
+                max={new Date().toLocaleDateString("en-CA")}
+                className={inputClass}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Birthday dashboard par dikhane ke liye DOB fill karein.
+              </p>
             </FormField>
 
             {!editingEmployee && (

@@ -1,76 +1,42 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  Bell,
-  Calendar,
-  CalendarCheck2,
   CalendarDays,
-  ChevronRight,
-  Circle,
+  CalendarCheck2,
   Clock3,
-  FileText,
-  Home,
-  LogOut,
-  Menu,
-  UserRound,
-  UsersRound,
-  X,
+  Gift,
+  RefreshCw,
+  Calendar,
 } from "lucide-react";
 
 const API_URL = "http://127.0.0.1:8000";
 
-function getStoredAuth() {
-  const possibleKeys = [
-    "employeeAuth",
-    "auth",
-    "employee_auth",
-    "userAuth",
-    "sessionAuth",
-  ];
-
+function getToken() {
   const storages = [localStorage, sessionStorage];
 
   for (const storage of storages) {
-    for (const key of possibleKeys) {
-      const value = storage.getItem(key);
+    for (const key of ["access_token", "token", "authToken", "employeeToken"]) {
+      const token = storage.getItem(key);
+      if (token) return token;
+    }
 
-      if (!value) {
-        continue;
-      }
+    for (const key of [
+      "employeeAuth",
+      "auth",
+      "employee_auth",
+      "userAuth",
+      "sessionAuth",
+    ]) {
+      const value = storage.getItem(key);
+      if (!value) continue;
 
       try {
         const parsed = JSON.parse(value);
-
-        if (parsed?.access_token) {
-          return parsed;
-        }
-
-        if (parsed?.token) {
-          return {
-            ...parsed,
-            access_token: parsed.token,
-          };
-        }
+        const token = parsed?.access_token || parsed?.token;
+        if (token) return token;
       } catch {
-        // Ignore invalid JSON values.
-      }
-    }
-  }
-
-  const tokenKeys = [
-    "access_token",
-    "token",
-    "employeeToken",
-  ];
-
-  for (const storage of storages) {
-    for (const key of tokenKeys) {
-      const token = storage.getItem(key);
-
-      if (token) {
-        return {
-          access_token: token,
-        };
+        // Ignore values that are not JSON.
       }
     }
   }
@@ -78,616 +44,417 @@ function getStoredAuth() {
   return null;
 }
 
-function clearStoredAuth() {
-  const keys = [
-    "employeeAuth",
-    "auth",
-    "employee_auth",
-    "userAuth",
-    "sessionAuth",
-    "access_token",
-    "token",
-    "employeeToken",
-  ];
+function formatDate(value) {
+  if (!value) return "Date not available";
 
-  for (const storage of [localStorage, sessionStorage]) {
-    keys.forEach((key) => storage.removeItem(key));
-  }
-}
-
-function formatDate(dateString) {
-  if (!dateString) {
-    return "-";
-  }
-
-  const date = new Date(`${dateString}T00:00:00`);
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "Date not available";
 
   return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
-    month: "long",
+    month: "short",
     year: "numeric",
   }).format(date);
 }
 
-function getDay(dateString) {
-  if (!dateString) {
-    return "-";
-  }
-
-  const date = new Date(`${dateString}T00:00:00`);
-
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-  }).format(date);
+function getDay(value) {
+  if (!value) return "--";
+  return value.slice(8, 10);
 }
 
-function getMonth(dateString) {
-  if (!dateString) {
-    return "-";
-  }
+function getMonth(value) {
+  if (!value) return "---";
 
-  const date = new Date(`${dateString}T00:00:00`);
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "---";
 
   return new Intl.DateTimeFormat("en-IN", {
     month: "short",
   }).format(date);
 }
 
-function isPastHoliday(dateString, todayString) {
-  return dateString < todayString;
-}
+function HolidayCard({ holiday, today }) {
+  const holidayDate = String(holiday.holiday_date || "").slice(0, 10);
+  const isToday = holidayDate === today;
+  const isPast = Boolean(today) && holidayDate < today;
 
-function SidebarItem({
-  icon: Icon,
-  label,
-  to,
-  active = false,
-  onClick,
-}) {
   return (
-    <Link
-      to={to}
-      onClick={onClick}
-      className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
-        active
-          ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/20"
-          : "text-slate-300 hover:bg-white/10 hover:text-white"
-      }`}
-    >
-      <Icon className="h-5 w-5 shrink-0" />
-      <span>{label}</span>
-    </Link>
+    <article className="flex gap-3 rounded-xl border border-slate-200 bg-white p-3 transition hover:border-cyan-200 hover:shadow-sm sm:p-4">
+      <div
+        className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl ${
+          isPast
+            ? "bg-slate-100 text-slate-500"
+            : "bg-cyan-50 text-cyan-700"
+        }`}
+      >
+        <span className="text-lg font-bold leading-none">
+          {getDay(holidayDate)}
+        </span>
+        <span className="mt-1 text-[10px] font-semibold uppercase">
+          {getMonth(holidayDate)}
+        </span>
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-bold text-slate-900">
+            {holiday.name || "Company Holiday"}
+          </h3>
+
+          {isToday && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              Today
+            </span>
+          )}
+        </div>
+
+        <p className="mt-1 text-xs text-slate-500">
+          {formatDate(holidayDate)}
+        </p>
+
+        {holiday.description && (
+          <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5 text-slate-600">
+            {holiday.description}
+          </p>
+        )}
+
+        <p
+          className={`mt-2 inline-flex items-center gap-1 text-[11px] font-semibold ${
+            isToday
+              ? "text-emerald-700"
+              : isPast
+                ? "text-slate-400"
+                : "text-cyan-700"
+          }`}
+        >
+          {isToday ? (
+            <Gift size={13} />
+          ) : isPast ? (
+            <Clock3 size={13} />
+          ) : (
+            <CalendarCheck2 size={13} />
+          )}
+
+          {isToday
+            ? "Holiday today"
+            : isPast
+              ? "Completed"
+              : "Upcoming holiday"}
+        </p>
+      </div>
+    </article>
   );
 }
 
-function Holidays() {
+export default function Holidays() {
   const navigate = useNavigate();
 
   const [holidays, setHolidays] = useState([]);
   const [today, setToday] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  const auth = useMemo(() => getStoredAuth(), []);
+  const loadHolidays = useCallback(async () => {
+    const token = getToken();
 
-  useEffect(() => {
-    async function loadHolidays() {
-      if (!auth?.access_token) {
-        setError("Your session has expired. Please login again.");
-        setLoading(false);
+    if (!token) {
+      setError("Your session has expired. Please log in again.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+
+      const response = await fetch(`${API_URL}/api/employee/holidays`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.status === 401) {
+        setError("Your session has expired. Please log in again.");
         return;
       }
 
-      try {
-        setLoading(true);
-        setError("");
+      const data = await response.json().catch(() => null);
 
-        const response = await fetch(
-          `${API_URL}/api/employee/holidays`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${auth.access_token}`,
-            },
-          },
-        );
-
-        if (response.status === 401) {
-          clearStoredAuth();
-          navigate("/login");
-          return;
-        }
-
-        if (!response.ok) {
-          const data = await response.json().catch(() => null);
-
-          throw new Error(
-            data?.detail || "Unable to load holidays.",
-          );
-        }
-
-        const data = await response.json();
-
-        setToday(data.today || "");
-        setHolidays(data.holidays || []);
-      } catch (requestError) {
-        setError(
-          requestError.message ||
-            "Something went wrong while loading holidays.",
-        );
-      } finally {
-        setLoading(false);
+      if (!response.ok) {
+        throw new Error(data?.detail || "Unable to load company holidays.");
       }
+
+      setToday(String(data?.today || "").slice(0, 10));
+      setHolidays(Array.isArray(data?.holidays) ? data.holidays : []);
+    } catch (requestError) {
+      setError(requestError.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
     }
+  }, []);
 
+  useEffect(() => {
     loadHolidays();
-  }, [auth, navigate]);
+  }, [loadHolidays]);
 
-  const pastHolidays = useMemo(() => {
-    return holidays.filter((holiday) =>
-      isPastHoliday(holiday.holiday_date, today),
-    );
-  }, [holidays, today]);
+  const sortedHolidays = useMemo(
+    () =>
+      [...holidays].sort((a, b) =>
+        String(a.holiday_date || "").localeCompare(
+          String(b.holiday_date || "")
+        )
+      ),
+    [holidays]
+  );
 
-  const upcomingHolidays = useMemo(() => {
-    return holidays.filter(
-      (holiday) =>
-        !isPastHoliday(holiday.holiday_date, today),
-    );
-  }, [holidays, today]);
+  const upcomingHolidays = useMemo(
+    () =>
+      sortedHolidays.filter(
+        (holiday) =>
+          String(holiday.holiday_date || "").slice(0, 10) >= today
+      ),
+    [sortedHolidays, today]
+  );
 
-  function handleLogout() {
-    clearStoredAuth();
+  const pastHolidays = useMemo(
+    () =>
+      sortedHolidays.filter(
+        (holiday) =>
+          String(holiday.holiday_date || "").slice(0, 10) < today
+      ),
+    [sortedHolidays, today]
+  );
+
+  const todayHoliday = upcomingHolidays.some(
+    (holiday) =>
+      String(holiday.holiday_date || "").slice(0, 10) === today
+  );
+
+  function handleLogin() {
     navigate("/login");
   }
 
-  function closeMobileSidebar() {
-    setMobileSidebarOpen(false);
-  }
-
   return (
-    <div className="min-h-screen bg-slate-100">
-      {/* Mobile Overlay */}
-      {mobileSidebarOpen && (
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col gap-3 overflow-hidden text-slate-900">
+      {/* Compact header */}
+      <header className="flex shrink-0 items-center justify-between gap-3 rounded-xl bg-gradient-to-r from-[#071a36] to-[#0b3158] px-4 py-3 text-white shadow-sm sm:px-5">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-cyan-300 sm:text-xs">
+            <CalendarDays size={15} />
+            Employee Portal
+          </p>
+          <h1 className="mt-1 text-lg font-bold sm:text-xl">
+            Company Holidays
+          </h1>
+          <p className="mt-0.5 hidden text-xs text-slate-300 sm:block">
+            View company holidays and plan your schedule.
+          </p>
+        </div>
+
         <button
           type="button"
-          aria-label="Close sidebar"
-          onClick={closeMobileSidebar}
-          className="fixed inset-0 z-40 bg-slate-950/60 lg:hidden"
-        />
+          onClick={loadHolidays}
+          disabled={loading}
+          className="flex shrink-0 items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-xs font-semibold hover:bg-white/10 disabled:opacity-60"
+        >
+          <RefreshCw
+            size={14}
+            className={loading ? "animate-spin" : ""}
+          />
+          <span className="hidden sm:inline">Refresh</span>
+        </button>
+      </header>
+
+      {/* Error message */}
+      {error && (
+        <div
+          role="alert"
+          className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
+        >
+          <span>{error}</span>
+
+          {error.toLowerCase().includes("log in") ||
+          error.toLowerCase().includes("session has expired") ? (
+            <button
+              type="button"
+              onClick={handleLogin}
+              className="rounded-lg bg-red-700 px-3 py-1.5 font-semibold text-white hover:bg-red-800"
+            >
+              Go to Login
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={loadHolidays}
+              className="inline-flex items-center gap-1 rounded-lg border border-red-300 px-3 py-1.5 font-semibold hover:bg-red-100"
+            >
+              <RefreshCw size={12} />
+              Try Again
+            </button>
+          )}
+        </div>
       )}
 
-      {/* Sidebar */}
-      <aside
-        className={`fixed left-0 top-0 z-50 flex h-screen w-[270px] flex-col bg-[#071a36] transition-transform duration-300 ${
-          mobileSidebarOpen
-            ? "translate-x-0"
-            : "-translate-x-full lg:translate-x-0"
-        }`}
-      >
-        <div className="flex h-[88px] items-center justify-between border-b border-white/10 px-6">
-          <Link
-            to="/employee-dashboard"
-            onClick={closeMobileSidebar}
-            className="flex items-center"
+      {/* Summary cards */}
+      <section className="grid shrink-0 grid-cols-3 gap-2">
+        {[
+          {
+            label: "Total Holidays",
+            value: holidays.length,
+            icon: CalendarDays,
+            style: "bg-cyan-50 text-cyan-700",
+          },
+          {
+            label: "Upcoming",
+            value: upcomingHolidays.length,
+            icon: CalendarCheck2,
+            style: "bg-emerald-50 text-emerald-700",
+          },
+          {
+            label: "Past Holidays",
+            value: pastHolidays.length,
+            icon: Clock3,
+            style: "bg-amber-50 text-amber-700",
+          },
+        ].map(({ label, value, icon: Icon, style }) => (
+          <div
+            key={label}
+            className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm sm:px-4"
           >
-            <img
-              src="/logo.png"
-              alt="LoanDPR Creditum Management"
-              className="h-14 w-auto object-contain"
-            />
-          </Link>
-
-          <button
-            type="button"
-            onClick={closeMobileSidebar}
-            className="rounded-lg p-2 text-slate-300 hover:bg-white/10 lg:hidden"
-            aria-label="Close menu"
-          >
-            <X className="h-6 w-6" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-4 py-6">
-          <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Main Menu
-          </p>
-
-          <nav className="space-y-1">
-            <SidebarItem
-              icon={Home}
-              label="Dashboard"
-              to="/employee-dashboard"
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={FileText}
-              label="My Tasks"
-              to="/tasks"
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={CalendarCheck2}
-              label="Attendance"
-              to="/attendance"
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={CalendarDays}
-              label="Leaves"
-              to="/leaves"
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={Calendar}
-              label="Holidays"
-              to="/holidays"
-              active
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={CalendarDays}
-              label="Calendar"
-              to="/calendar"
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={Bell}
-              label="Announcements"
-              to="/announcements"
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={UserRound}
-              label="Profile"
-              to="/profile"
-              onClick={closeMobileSidebar}
-            />
-          </nav>
-        </div>
-
-        <div className="border-t border-white/10 p-4">
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-red-500/10 hover:text-red-300"
-          >
-            <LogOut className="h-5 w-5" />
-            Logout
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="min-h-screen lg:ml-[270px]">
-        {/* Top Header */}
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-          <div className="flex h-[88px] items-center justify-between px-5 md:px-8">
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                onClick={() => setMobileSidebarOpen(true)}
-                className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-700 lg:hidden"
-                aria-label="Open menu"
-              >
-                <Menu className="h-6 w-6" />
-              </button>
-
-              <div>
-                <p className="text-sm font-medium text-slate-500">
-                  Employee Portal
-                </p>
-
-                <h1 className="text-xl font-bold text-slate-900 md:text-2xl">
-                  Company Holidays
-                </h1>
-              </div>
+            <div className="min-w-0">
+              <p className="text-[10px] text-slate-500 sm:text-xs">
+                {label}
+              </p>
+              <p className="mt-0.5 text-xl font-bold sm:text-2xl">
+                {loading ? "—" : value}
+              </p>
             </div>
-
-            <div className="hidden items-center gap-3 sm:flex">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
-                <div className="flex items-center gap-2">
-                  <Clock3 className="h-4 w-4 text-cyan-600" />
-
-                  <span className="text-sm font-medium text-slate-600">
-                    {today ? formatDate(today) : "Loading..."}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="relative rounded-xl border border-slate-200 bg-white p-3 text-slate-600 transition hover:border-cyan-300 hover:text-cyan-600"
-                aria-label="Notifications"
-              >
-                <Bell className="h-5 w-5" />
-
-                <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-cyan-500" />
-              </button>
+            <div className={`hidden rounded-lg p-2 sm:block ${style}`}>
+              <Icon size={18} />
             </div>
           </div>
-        </header>
+        ))}
+      </section>
 
-        <div className="p-5 md:p-8">
-          {/* Page Intro */}
-          <section className="mb-8 overflow-hidden rounded-2xl bg-gradient-to-r from-[#071a36] to-[#0b3158] p-6 text-white shadow-lg md:p-8">
-            <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
+      {/* Today's holiday banner */}
+      {!loading && todayHoliday && (
+        <div className="flex shrink-0 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+          <Gift size={16} className="shrink-0 text-emerald-700" />
+          <p>
+            <strong>Today is a company holiday!</strong>{" "}
+            Check the holiday details below.
+          </p>
+        </div>
+      )}
+
+      {/* Scrollable holidays content */}
+      <section className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold sm:text-lg">
+              Upcoming Holidays
+            </h2>
+            <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs">
+              Holidays from today onward
+            </p>
+          </div>
+
+          <span className="shrink-0 rounded-full bg-cyan-50 px-2.5 py-1 text-[10px] font-semibold text-cyan-800 sm:text-xs">
+            {loading ? "Loading..." : `${upcomingHolidays.length} holidays`}
+          </span>
+        </div>
+
+        {loading ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {[1, 2].map((item) => (
+              <div
+                key={item}
+                className="h-24 animate-pulse rounded-xl bg-slate-200"
+              />
+            ))}
+          </div>
+        ) : upcomingHolidays.length > 0 ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {upcomingHolidays.map((holiday, index) => (
+              <HolidayCard
+                key={holiday.id ?? `${holiday.holiday_date}-${index}`}
+                holiday={holiday}
+                today={today}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center">
+            <Calendar className="mx-auto h-8 w-8 text-slate-300" />
+            <h3 className="mt-2 text-sm font-semibold text-slate-800">
+              No upcoming holidays
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              There are no upcoming holidays in the company calendar right now.
+            </p>
+          </div>
+        )}
+
+        {!loading && pastHolidays.length > 0 && (
+          <div className="mt-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <div className="mb-3 flex items-center gap-2 text-cyan-300">
-                  <Calendar className="h-5 w-5" />
-
-                  <span className="text-sm font-semibold uppercase tracking-wider">
-                    Holiday Calendar
-                  </span>
-                </div>
-
-                <h2 className="text-2xl font-bold md:text-3xl">
-                  Company Holiday Schedule
+                <h2 className="text-base font-bold sm:text-lg">
+                  Past Holidays
                 </h2>
-
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">
-                  View the official company holiday schedule and
-                  plan your work and leave accordingly.
+                <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs">
+                  Previously observed company holidays
                 </p>
               </div>
-
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white/10">
-                <CalendarDays className="h-10 w-10 text-cyan-300" />
-              </div>
+              <span className="rounded-full bg-slate-200 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
+                {pastHolidays.length}
+              </span>
             </div>
-          </section>
 
-          {/* Error */}
-          {error && (
-            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-              {error}
-            </div>
-          )}
-
-          {/* Loading */}
-          {loading ? (
-            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((item) => (
+            <div className="grid gap-2 lg:grid-cols-2">
+              {pastHolidays.map((holiday, index) => (
                 <div
-                  key={item}
-                  className="h-40 animate-pulse rounded-2xl bg-white shadow-sm"
-                />
+                  key={holiday.id ?? `${holiday.holiday_date}-${index}`}
+                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                    <Calendar size={17} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-semibold text-slate-800">
+                      {holiday.name || "Company Holiday"}
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {formatDate(holiday.holiday_date)}
+                    </p>
+                  </div>
+                  <span className="hidden text-[10px] font-semibold text-slate-400 sm:inline">
+                    Completed
+                  </span>
+                </div>
               ))}
             </div>
-          ) : (
-            <>
-              {/* Summary Cards */}
-              <div className="mb-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-slate-500">
-                        Total Holidays
-                      </p>
+          </div>
+        )}
 
-                      <p className="mt-2 text-3xl font-bold text-slate-900">
-                        {holidays.length}
-                      </p>
-                    </div>
+        {!loading && !error && holidays.length === 0 && (
+          <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center">
+            <CalendarDays className="mx-auto h-8 w-8 text-slate-300" />
+            <h3 className="mt-2 text-sm font-semibold text-slate-800">
+              No holidays have been added yet
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Company holidays will appear here when published.
+            </p>
+          </div>
+        )}
 
-                    <div className="rounded-xl bg-cyan-50 p-3 text-cyan-600">
-                      <CalendarDays className="h-6 w-6" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-slate-500">
-                        Upcoming Holidays
-                      </p>
-
-                      <p className="mt-2 text-3xl font-bold text-slate-900">
-                        {upcomingHolidays.length}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl bg-emerald-50 p-3 text-emerald-600">
-                      <CalendarCheck2 className="h-6 w-6" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-slate-500">
-                        Past Holidays
-                      </p>
-
-                      <p className="mt-2 text-3xl font-bold text-slate-900">
-                        {pastHolidays.length}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl bg-slate-100 p-3 text-slate-600">
-                      <Clock3 className="h-6 w-6" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Upcoming */}
-              <section className="mb-8">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900">
-                      Upcoming Holidays
-                    </h2>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      Your upcoming company holidays
-                    </p>
-                  </div>
-
-                  <span className="rounded-full bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-700">
-                    {upcomingHolidays.length} Holidays
-                  </span>
-                </div>
-
-                {upcomingHolidays.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-                    <CalendarDays className="mx-auto h-10 w-10 text-slate-300" />
-
-                    <h3 className="mt-4 font-semibold text-slate-800">
-                      No upcoming holidays
-                    </h3>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      There are currently no upcoming holidays in
-                      the company calendar.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    {upcomingHolidays.map((holiday) => (
-                      <div
-                        key={holiday.id}
-                        className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md"
-                      >
-                        <div className="flex gap-4">
-                          <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl bg-cyan-50 text-cyan-700">
-                            <span className="text-xl font-bold leading-none">
-                              {getDay(holiday.holiday_date)}
-                            </span>
-
-                            <span className="mt-1 text-[11px] font-semibold uppercase">
-                              {getMonth(holiday.holiday_date)}
-                            </span>
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <h3 className="font-bold text-slate-900">
-                                  {holiday.name}
-                                </h3>
-
-                                <p className="mt-1 text-sm text-slate-500">
-                                  {formatDate(
-                                    holiday.holiday_date,
-                                  )}
-                                </p>
-                              </div>
-
-                              <Circle className="h-2.5 w-2.5 shrink-0 fill-cyan-500 text-cyan-500" />
-                            </div>
-
-                            {holiday.description && (
-                              <p className="mt-3 text-sm leading-5 text-slate-500">
-                                {holiday.description}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              {/* Past */}
-              <section>
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900">
-                      Past Holidays
-                    </h2>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      Holidays already completed this year
-                    </p>
-                  </div>
-
-                  <span className="hidden rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 sm:inline-flex">
-                    {pastHolidays.length} Holidays
-                  </span>
-                </div>
-
-                {pastHolidays.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-                    <Clock3 className="mx-auto h-10 w-10 text-slate-300" />
-
-                    <h3 className="mt-4 font-semibold text-slate-800">
-                      No past holidays
-                    </h3>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      No company holidays have passed yet.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div className="divide-y divide-slate-100">
-                      {pastHolidays.map((holiday) => (
-                        <div
-                          key={holiday.id}
-                          className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
-                              <Calendar className="h-5 w-5" />
-                            </div>
-
-                            <div>
-                              <h3 className="font-semibold text-slate-800">
-                                {holiday.name}
-                              </h3>
-
-                              <p className="mt-1 text-sm text-slate-500">
-                                {formatDate(
-                                  holiday.holiday_date,
-                                )}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 text-sm font-medium text-slate-400">
-                            Completed
-                            <ChevronRight className="h-4 w-4" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </section>
-
-              {/* Empty database state */}
-              {holidays.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
-                  <CalendarDays className="mx-auto h-12 w-12 text-slate-300" />
-
-                  <h3 className="mt-4 text-lg font-bold text-slate-800">
-                    No holidays available
-                  </h3>
-
-                  <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-                    The company holiday calendar does not contain
-                    any active holiday records yet.
-                  </p>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </main>
+        <p className="mt-4 border-t border-slate-200 pt-3 text-[11px] leading-5 text-slate-500">
+          Holiday information is displayed from the company calendar. For
+          corrections, please contact your administrator.
+        </p>
+      </section>
     </div>
   );
 }
-
-export default Holidays;

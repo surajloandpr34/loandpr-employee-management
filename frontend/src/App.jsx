@@ -1,10 +1,6 @@
 
 import { useLocation } from "react-router-dom";
-import {
-  BrowserRouter,
-  Route,
-  Routes,
-} from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import Footer from "./components/Footer";
 import Navbar from "./components/Navbar";
@@ -35,6 +31,7 @@ const INTERNAL_ROUTES = [
   "/forgot-password",
   "/reset-password",
   "/employee-dashboard",
+  "/employee-tasks",
   "/admin-dashboard",
   "/employee-management",
   "/tasks",
@@ -56,7 +53,7 @@ function AppLayout() {
       {!isInternalPage && <Navbar />}
 
       <Routes>
-        {/* Public Website */}
+        {/* Public website */}
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<About />} />
         <Route path="/services" element={<Services />} />
@@ -69,11 +66,24 @@ function AppLayout() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* Employee Portal: shared sidebar and header */}
+        {/* Employee portal */}
         <Route element={<EmployeeLayout />}>
           <Route
             path="/employee-dashboard"
             element={<EmployeeDashboard />}
+          />
+          <Route
+            path="/employee-tasks"
+            element={
+              <div className="rounded-xl border border-slate-200 bg-white p-6">
+                <h1 className="text-xl font-bold text-slate-900">
+                  My Tasks
+                </h1>
+                <p className="mt-2 text-sm text-slate-500">
+                  Employee task page component abhi connect karna baaki hai.
+                </p>
+              </div>
+            }
           />
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/leaves" element={<Leaves />} />
@@ -83,7 +93,7 @@ function AppLayout() {
           <Route path="/profile" element={<Profile />} />
         </Route>
 
-        {/* Admin Portal */}
+        {/* Admin portal */}
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
         <Route
           path="/employee-management"

@@ -1,4 +1,3 @@
-
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -29,6 +28,8 @@ from ..schemas import (
     EmployeeCalendarResponse,
     EmployeeDashboardResponse,
     EmployeeProfileUpdateRequest,
+    TaskResponse,
+    TaskStatusUpdate,
 )
 from ..security import get_current_user
 
@@ -196,24 +197,25 @@ def update_employee_profile(
 
     if current_user.full_name != request.full_name.strip():
         changes.append("name")
+
     if (current_user.email or "").lower() != email:
         changes.append("email")
-    if current_user.mobile != (
+
+    new_mobile = (
         request.mobile.strip()
         if request.mobile and request.mobile.strip()
         else None
-    ):
+    )
+
+    if current_user.mobile != new_mobile:
         changes.append("mobile")
+
     if current_user.date_of_birth != request.date_of_birth:
         changes.append("date of birth")
 
     current_user.full_name = request.full_name.strip()
     current_user.email = email
-    current_user.mobile = (
-        request.mobile.strip()
-        if request.mobile and request.mobile.strip()
-        else None
-    )
+    current_user.mobile = new_mobile
     current_user.date_of_birth = request.date_of_birth
 
     if changes:
@@ -421,15 +423,10 @@ def get_employee_activity(
 ):
     limit = max(1, min(limit, 100))
 
-    # Employee-visible events:
-    # - events explicitly related to this employee
-    # - company-wide admin notices
     activities = db.scalars(
         select(ActivityLog)
         .where(
-            (
-                ActivityLog.employee_id == current_user.id
-            )
+            (ActivityLog.employee_id == current_user.id)
             | (
                 ActivityLog.is_admin_notice.is_(True)
                 & ActivityLog.employee_id.is_(None)
@@ -652,3 +649,70 @@ def get_employee_calendar(
         "leaves": leave_data,
         "holidays": holiday_data,
     }
+
+
+# ============================================================
+# EMPLOYEE TASKS
+# ============================================================
+
+@router.get(
+    "/tasks",
+    response_model=list[TaskResponse],
+)
+def get_employee_tasks(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return tasks assigned only to the logged-in employee."""
+    return db.scalars(
+        select(Task)
+        .where(Task.employee_id == current_user.id)
+        .order_by(Task.task_date.desc(), Task.id.desc())
+    ).all()
+
+
+@router.patch(
+    "/tasks/{task_id}/status",
+    response_model=TaskResponse,
+)
+def update_employee_task_status(
+    task_id: int,
+    request: TaskStatusUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Allow an employee to update only their own task status."""
+    task = db.scalar(
+        select(Task).where(
+            Task.id == task_id,
+            Task.employee_id == current_user.id,
+        )
+    )
+
+    if task is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Task not found.",
+        )
+
+    previous_status = task.status
+    task.status = request.status
+
+    if previous_status != request.status:
+        log_activity(
+            db,
+            actor_id=current_user.id,
+            employee_id=current_user.id,
+            event_type="task_status_updated",
+            title="Task status updated",
+            description=(
+                f"{current_user.full_name} updated task "
+                f"'{task.title}' from {previous_status} "
+                f"to {request.status}."
+            ),
+        )
+
+    db.commit()
+    db.refresh(task)
+
+    return task

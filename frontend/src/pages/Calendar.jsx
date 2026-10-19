@@ -1,75 +1,44 @@
+
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
-  Bell,
-  Calendar as CalendarIcon,
-  CalendarCheck2,
   CalendarDays,
+  CalendarCheck2,
   ChevronLeft,
   ChevronRight,
   Clock3,
   FileText,
-  Home,
-  LogOut,
-  Menu,
-  UserRound,
-  X,
+  Palmtree,
+  RefreshCw,
 } from "lucide-react";
 
 const API_URL = "http://127.0.0.1:8000";
 
-function getStoredAuth() {
-  const possibleKeys = [
-    "employeeAuth",
-    "auth",
-    "employee_auth",
-    "userAuth",
-    "sessionAuth",
-  ];
-
+function getToken() {
   const storages = [localStorage, sessionStorage];
 
   for (const storage of storages) {
-    for (const key of possibleKeys) {
-      const value = storage.getItem(key);
+    for (const key of ["access_token", "token", "authToken", "employeeToken"]) {
+      const token = storage.getItem(key);
+      if (token) return token;
+    }
 
-      if (!value) {
-        continue;
-      }
+    for (const key of [
+      "employeeAuth",
+      "auth",
+      "employee_auth",
+      "userAuth",
+      "sessionAuth",
+    ]) {
+      const value = storage.getItem(key);
+      if (!value) continue;
 
       try {
         const parsed = JSON.parse(value);
-
-        if (parsed?.access_token) {
-          return parsed;
-        }
-
-        if (parsed?.token) {
-          return {
-            ...parsed,
-            access_token: parsed.token,
-          };
-        }
+        const token = parsed?.access_token || parsed?.token;
+        if (token) return token;
       } catch {
         // Ignore invalid JSON.
-      }
-    }
-  }
-
-  const tokenKeys = [
-    "access_token",
-    "token",
-    "employeeToken",
-  ];
-
-  for (const storage of storages) {
-    for (const key of tokenKeys) {
-      const token = storage.getItem(key);
-
-      if (token) {
-        return {
-          access_token: token,
-        };
       }
     }
   }
@@ -77,74 +46,37 @@ function getStoredAuth() {
   return null;
 }
 
-function clearStoredAuth() {
-  const keys = [
-    "employeeAuth",
-    "auth",
-    "employee_auth",
-    "userAuth",
-    "sessionAuth",
-    "access_token",
-    "token",
-    "employeeToken",
-  ];
-
-  for (const storage of [localStorage, sessionStorage]) {
-    keys.forEach((key) => storage.removeItem(key));
-  }
+function dateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function toDateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+function parseDate(value) {
+  if (!value) return null;
 
-  return `${year}-${month}-${day}`;
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function parseDate(dateString) {
-  if (!dateString) {
-    return null;
-  }
-
-  return new Date(`${dateString}T00:00:00`);
-}
-
-function formatLongDate(dateString) {
-  const date = parseDate(dateString);
-
-  if (!date) {
-    return "-";
-  }
+function formatDate(value) {
+  const date = parseDate(value);
+  if (!date) return "—";
 
   return new Intl.DateTimeFormat("en-IN", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(date);
-}
-
-function formatShortDate(dateString) {
-  const date = parseDate(dateString);
-
-  if (!date) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
     day: "numeric",
     month: "short",
     year: "numeric",
   }).format(date);
 }
 
-function formatTime(dateTimeString) {
-  if (!dateTimeString) {
-    return "-";
-  }
+function formatTime(value) {
+  if (!value) return "Not recorded";
 
-  const date = new Date(dateTimeString);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not recorded";
 
   return new Intl.DateTimeFormat("en-IN", {
     hour: "2-digit",
@@ -153,35 +85,39 @@ function formatTime(dateTimeString) {
   }).format(date);
 }
 
-function SidebarItem({
-  icon: Icon,
-  label,
-  to,
-  active = false,
-  onClick,
-}) {
+function StatusDot({ color, label }) {
   return (
-    <Link
-      to={to}
-      onClick={onClick}
-      className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
-        active
-          ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/20"
-          : "text-slate-300 hover:bg-white/10 hover:text-white"
-      }`}
-    >
-      <Icon className="h-5 w-5 shrink-0" />
-      <span>{label}</span>
-    </Link>
+    <span className="inline-flex items-center gap-1 text-[10px] text-slate-600 sm:text-xs">
+      <span className={`h-2 w-2 shrink-0 rounded-full ${color}`} />
+      {label}
+    </span>
   );
 }
 
-function Calendar() {
+function DetailCard({ icon: Icon, label, title, color, children }) {
+  return (
+    <div className={`rounded-lg border p-2 ${color}`}>
+      <div className="flex items-start gap-2">
+        <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+
+        <div className="min-w-0">
+          <p className="text-[9px] font-bold uppercase tracking-wide opacity-80">
+            {label}
+          </p>
+
+          <h3 className="mt-0.5 break-words text-xs font-bold">{title}</h3>
+
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Calendar() {
   const navigate = useNavigate();
 
-  const auth = useMemo(() => getStoredAuth(), []);
-
-  const [calendarData, setCalendarData] = useState({
+  const [data, setData] = useState({
     today: "",
     attendance: [],
     tasks: [],
@@ -189,853 +125,465 @@ function Calendar() {
     holidays: [],
   });
 
-  const [currentMonth, setCurrentMonth] = useState(
-    new Date(),
+  const [month, setMonth] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState(() =>
+    dateKey(new Date()),
   );
-
-  const [selectedDate, setSelectedDate] = useState(
-    toDateKey(new Date()),
-  );
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [mobileSidebarOpen, setMobileSidebarOpen] =
-    useState(false);
 
-  useEffect(() => {
-    async function loadCalendar() {
-      if (!auth?.access_token) {
-        setError(
-          "Your session has expired. Please login again.",
-        );
-        setLoading(false);
+  async function loadCalendar() {
+    const token = getToken();
+
+    if (!token) {
+      setError("Your session has expired. Please log in again.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+
+      const response = await fetch(`${API_URL}/api/employee/calendar`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.status === 401) {
+        setError("Your session has expired. Please log in again.");
         return;
       }
 
-      try {
-        setLoading(true);
-        setError("");
+      const result = await response.json().catch(() => null);
 
-        const response = await fetch(
-          `${API_URL}/api/employee/calendar`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${auth.access_token}`,
-            },
-          },
-        );
-
-        if (response.status === 401) {
-          clearStoredAuth();
-          navigate("/login");
-          return;
-        }
-
-        if (!response.ok) {
-          const data = await response.json().catch(() => null);
-
-          throw new Error(
-            data?.detail || "Unable to load calendar data.",
-          );
-        }
-
-        const data = await response.json();
-
-        setCalendarData({
-          today: data.today || "",
-          attendance: data.attendance || [],
-          tasks: data.tasks || [],
-          leaves: data.leaves || [],
-          holidays: data.holidays || [],
-        });
-
-        if (data.today) {
-          setSelectedDate(data.today);
-
-          const todayDate = parseDate(data.today);
-
-          if (todayDate) {
-            setCurrentMonth(todayDate);
-          }
-        }
-      } catch (requestError) {
-        setError(
-          requestError.message ||
-            "Something went wrong while loading calendar.",
-        );
-      } finally {
-        setLoading(false);
+      if (!response.ok) {
+        throw new Error(result?.detail || "Unable to load calendar.");
       }
-    }
 
+      const normalized = {
+        today: String(result?.today || "").slice(0, 10),
+        attendance: Array.isArray(result?.attendance)
+          ? result.attendance
+          : [],
+        tasks: Array.isArray(result?.tasks) ? result.tasks : [],
+        leaves: Array.isArray(result?.leaves) ? result.leaves : [],
+        holidays: Array.isArray(result?.holidays) ? result.holidays : [],
+      };
+
+      setData(normalized);
+
+      if (normalized.today) {
+        setSelectedDate(normalized.today);
+
+        const todayDate = parseDate(normalized.today);
+        if (todayDate) setMonth(todayDate);
+      }
+    } catch (requestError) {
+      setError(requestError.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
     loadCalendar();
-  }, [auth, navigate]);
+  }, []);
 
   const monthLabel = new Intl.DateTimeFormat("en-IN", {
     month: "long",
     year: "numeric",
-  }).format(currentMonth);
+  }).format(month);
 
-  const calendarDays = useMemo(() => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
-
-    const firstDay = new Date(year, month, 1);
-    const firstWeekday = firstDay.getDay();
-
-    const daysInMonth = new Date(
-      year,
-      month + 1,
-      0,
-    ).getDate();
-
-    const daysInPreviousMonth = new Date(
-      year,
-      month,
-      0,
-    ).getDate();
-
+  const days = useMemo(() => {
+    const year = month.getFullYear();
+    const monthIndex = month.getMonth();
+    const firstWeekday = new Date(year, monthIndex, 1).getDay();
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
     const cells = [];
 
-    // Previous month dates
-    for (let index = firstWeekday - 1; index >= 0; index -= 1) {
-      const day = daysInPreviousMonth - index;
-
-      const date = new Date(
-        year,
-        month - 1,
-        day,
-      );
-
-      cells.push({
-        date,
-        key: toDateKey(date),
-        currentMonth: false,
-      });
+    for (let index = 0; index < firstWeekday; index += 1) {
+      const date = new Date(year, monthIndex, index - firstWeekday + 1);
+      cells.push({ date, key: dateKey(date), inMonth: false });
     }
 
-    // Current month dates
     for (let day = 1; day <= daysInMonth; day += 1) {
-      const date = new Date(year, month, day);
-
-      cells.push({
-        date,
-        key: toDateKey(date),
-        currentMonth: true,
-      });
+      const date = new Date(year, monthIndex, day);
+      cells.push({ date, key: dateKey(date), inMonth: true });
     }
 
-    // Next month dates
     let nextDay = 1;
 
     while (cells.length < 42) {
-      const date = new Date(
-        year,
-        month + 1,
-        nextDay,
-      );
-
-      cells.push({
-        date,
-        key: toDateKey(date),
-        currentMonth: false,
-      });
-
-      nextDay += 1;
+      const date = new Date(year, monthIndex + 1, nextDay++);
+      cells.push({ date, key: dateKey(date), inMonth: false });
     }
 
     return cells;
-  }, [currentMonth]);
+  }, [month]);
 
   const attendanceByDate = useMemo(() => {
     const map = {};
 
-    calendarData.attendance.forEach((item) => {
-      map[item.date] = item;
+    data.attendance.forEach((item) => {
+      const key = String(item.date || "").slice(0, 10);
+      if (key) map[key] = item;
     });
 
     return map;
-  }, [calendarData.attendance]);
+  }, [data.attendance]);
 
   const holidayByDate = useMemo(() => {
     const map = {};
 
-    calendarData.holidays.forEach((item) => {
-      map[item.date] = item;
+    data.holidays.forEach((item) => {
+      const key = String(item.date || "").slice(0, 10);
+      if (key) map[key] = item;
     });
 
     return map;
-  }, [calendarData.holidays]);
+  }, [data.holidays]);
 
   const tasksByDate = useMemo(() => {
     const map = {};
 
-    calendarData.tasks.forEach((task) => {
-      if (!map[task.date]) {
-        map[task.date] = [];
-      }
+    data.tasks.forEach((task) => {
+      const key = String(task.date || "").slice(0, 10);
+      if (!key) return;
 
-      map[task.date].push(task);
+      if (!map[key]) map[key] = [];
+      map[key].push(task);
     });
 
     return map;
-  }, [calendarData.tasks]);
+  }, [data.tasks]);
 
-  function isDateInsideLeave(dateKey) {
-    return calendarData.leaves.some((leave) => {
-      return (
-        dateKey >= leave.from_date &&
-        dateKey <= leave.to_date
-      );
+  const leavesByDate = useMemo(() => {
+    const map = {};
+
+    data.leaves.forEach((leave) => {
+      if (!leave.from_date || !leave.to_date) return;
+
+      let current = parseDate(leave.from_date);
+      const end = parseDate(leave.to_date);
+      let count = 0;
+
+      while (current && end && current <= end && count < 370) {
+        const key = dateKey(current);
+
+        if (!map[key]) map[key] = [];
+        map[key].push(leave);
+
+        current.setDate(current.getDate() + 1);
+        count += 1;
+      }
     });
-  }
 
-  function getLeaveForDate(dateKey) {
-    return calendarData.leaves.find((leave) => {
-      return (
-        dateKey >= leave.from_date &&
-        dateKey <= leave.to_date
-      );
-    });
-  }
+    return map;
+  }, [data.leaves]);
 
-  const selectedAttendance =
-    attendanceByDate[selectedDate] || null;
+  const selectedAttendance = attendanceByDate[selectedDate];
+  const selectedHoliday = holidayByDate[selectedDate];
+  const selectedTasks = tasksByDate[selectedDate] || [];
+  const selectedLeaves = leavesByDate[selectedDate] || [];
 
-  const selectedHoliday =
-    holidayByDate[selectedDate] || null;
-
-  const selectedTasks =
-    tasksByDate[selectedDate] || [];
-
-  const selectedLeave =
-    getLeaveForDate(selectedDate);
-
-  const selectedDateObject = parseDate(selectedDate);
-
-  const selectedDateLabel = selectedDateObject
-    ? new Intl.DateTimeFormat("en-IN", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      }).format(selectedDateObject)
-    : "Select a date";
-
-  function goToPreviousMonth() {
-    setCurrentMonth(
+  function goToMonth(offset) {
+    setMonth(
       (previous) =>
-        new Date(
-          previous.getFullYear(),
-          previous.getMonth() - 1,
-          1,
-        ),
-    );
-  }
-
-  function goToNextMonth() {
-    setCurrentMonth(
-      (previous) =>
-        new Date(
-          previous.getFullYear(),
-          previous.getMonth() + 1,
-          1,
-        ),
+        new Date(previous.getFullYear(), previous.getMonth() + offset, 1),
     );
   }
 
   function goToToday() {
-    const todayDate = parseDate(calendarData.today);
+    const today = data.today || dateKey(new Date());
+    setSelectedDate(today);
 
-    if (!todayDate) {
-      const now = new Date();
-
-      setCurrentMonth(now);
-      setSelectedDate(toDateKey(now));
-
-      return;
-    }
-
-    setCurrentMonth(todayDate);
-    setSelectedDate(calendarData.today);
+    const todayDate = parseDate(today);
+    if (todayDate) setMonth(todayDate);
   }
 
-  function handleLogout() {
-    clearStoredAuth();
-    navigate("/login");
-  }
-
-  function closeMobileSidebar() {
-    setMobileSidebarOpen(false);
-  }
-
-  function getDayStatus(dateKey) {
-    const status = [];
-
-    if (holidayByDate[dateKey]) {
-      status.push("holiday");
-    }
-
-    if (attendanceByDate[dateKey]) {
-      status.push("attendance");
-    }
-
-    if (isDateInsideLeave(dateKey)) {
-      status.push("leave");
-    }
-
-    if (tasksByDate[dateKey]?.length) {
-      status.push("task");
-    }
-
-    return status;
+  function getDayMarkers(key) {
+    return [
+      holidayByDate[key] && "bg-cyan-500",
+      attendanceByDate[key] && "bg-emerald-500",
+      leavesByDate[key]?.length && "bg-amber-500",
+      tasksByDate[key]?.length && "bg-violet-500",
+    ].filter(Boolean);
   }
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      {/* Mobile Overlay */}
-      {mobileSidebarOpen && (
+    <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden bg-slate-50 p-2 text-slate-900">
+      {/* Compact header */}
+      <section className="flex shrink-0 items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-[#071a36] to-[#0b3158] px-3 py-2.5 text-white shadow-sm">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="hidden rounded-lg bg-white/10 p-2 sm:block">
+            <CalendarDays className="h-5 w-5 text-cyan-200" />
+          </div>
+
+          <div className="min-w-0">
+            <p className="text-[9px] font-semibold uppercase tracking-widest text-cyan-200">
+              Employee Portal
+            </p>
+            <h1 className="text-lg font-bold sm:text-xl">Work Calendar</h1>
+            <p className="hidden text-[10px] text-slate-300 sm:block">
+              Attendance, tasks, leave and company holidays
+            </p>
+          </div>
+        </div>
+
         <button
           type="button"
-          aria-label="Close sidebar"
-          onClick={closeMobileSidebar}
-          className="fixed inset-0 z-40 bg-slate-950/60 lg:hidden"
-        />
+          onClick={goToToday}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white px-2.5 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-100"
+        >
+          <CalendarCheck2 className="h-3.5 w-3.5" />
+          Today
+        </button>
+      </section>
+
+      {error && (
+        <div
+          role="alert"
+          className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700"
+        >
+          <p>{error}</p>
+
+          {error.toLowerCase().includes("log in") ? (
+            <button
+              type="button"
+              onClick={() => navigate("/login")}
+              className="rounded-md bg-red-700 px-3 py-1.5 font-semibold text-white"
+            >
+              Go to Login
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={loadCalendar}
+              className="inline-flex items-center gap-1 rounded-md border border-red-300 px-2 py-1.5 font-semibold"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Retry
+            </button>
+          )}
+        </div>
       )}
 
-      {/* Sidebar */}
-      <aside
-        className={`fixed left-0 top-0 z-50 flex h-screen w-[270px] flex-col bg-[#071a36] transition-transform duration-300 ${
-          mobileSidebarOpen
-            ? "translate-x-0"
-            : "-translate-x-full lg:translate-x-0"
-        }`}
-      >
-        <div className="flex h-[88px] items-center justify-between border-b border-white/10 px-6">
-          <Link
-            to="/employee-dashboard"
-            onClick={closeMobileSidebar}
-            className="flex items-center"
-          >
-            <img
-              src="/logo.png"
-              alt="LoanDPR Creditum Management"
-              className="h-14 w-auto object-contain"
-            />
-          </Link>
+      {/* Compact legend */}
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+        <StatusDot color="bg-cyan-500" label="Holiday" />
+        <StatusDot color="bg-emerald-500" label="Attendance" />
+        <StatusDot color="bg-amber-500" label="Leave" />
+        <StatusDot color="bg-violet-500" label="Task" />
+      </div>
 
-          <button
-            type="button"
-            onClick={closeMobileSidebar}
-            className="rounded-lg p-2 text-slate-300 hover:bg-white/10 lg:hidden"
-            aria-label="Close menu"
-          >
-            <X className="h-6 w-6" />
-          </button>
-        </div>
+      {/* Remaining screen area */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-hidden xl:grid-cols-[minmax(0,1.5fr)_minmax(250px,0.8fr)]">
+        {loading ? (
+          <>
+            <div className="min-h-0 animate-pulse rounded-xl bg-white" />
+            <div className="min-h-0 animate-pulse rounded-xl bg-white" />
+          </>
+        ) : (
+          <>
+            {/* Calendar grid: no scrolling */}
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+              <div className="mb-1 flex shrink-0 items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <h2 className="truncate text-base font-bold sm:text-lg">
+                    {monthLabel}
+                  </h2>
+                  <p className="text-[10px] text-slate-500">
+                    Select a date
+                  </p>
+                </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-6">
-          <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Main Menu
-          </p>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => goToMonth(-1)}
+                    aria-label="Previous month"
+                    className="rounded-md border border-slate-200 p-1.5 hover:border-cyan-300 hover:text-cyan-700"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
 
-          <nav className="space-y-1">
-            <SidebarItem
-              icon={Home}
-              label="Dashboard"
-              to="/employee-dashboard"
-              onClick={closeMobileSidebar}
-            />
+                  <button
+                    type="button"
+                    onClick={() => goToMonth(1)}
+                    aria-label="Next month"
+                    className="rounded-md border border-slate-200 p-1.5 hover:border-cyan-300 hover:text-cyan-700"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
 
-            <SidebarItem
-              icon={FileText}
-              label="My Tasks"
-              to="/tasks"
-              onClick={closeMobileSidebar}
-            />
+              <div className="grid shrink-0 grid-cols-7">
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                  (day) => (
+                    <div
+                      key={day}
+                      className="py-1 text-center text-[9px] font-semibold uppercase text-slate-400 sm:text-[10px]"
+                    >
+                      {day}
+                    </div>
+                  ),
+                )}
+              </div>
 
-            <SidebarItem
-              icon={CalendarCheck2}
-              label="Attendance"
-              to="/attendance"
-              onClick={closeMobileSidebar}
-            />
+              <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 overflow-hidden rounded-md border-l border-t border-slate-200">
+                {days.map((cell) => {
+                  const today = cell.key === data.today;
+                  const selected = cell.key === selectedDate;
+                  const markers = getDayMarkers(cell.key);
 
-            <SidebarItem
-              icon={CalendarDays}
-              label="Leaves"
-              to="/leaves"
-              onClick={closeMobileSidebar}
-            />
+                  return (
+                    <button
+                      type="button"
+                      key={cell.key}
+                      onClick={() => setSelectedDate(cell.key)}
+                      aria-label={`Select ${formatDate(cell.key)}`}
+                      aria-pressed={selected}
+                      className={`flex min-h-0 min-w-0 flex-col items-start overflow-hidden border-b border-r border-slate-200 p-0.5 text-left transition sm:p-1 ${
+                        cell.inMonth
+                          ? "bg-white hover:bg-slate-50"
+                          : "bg-slate-50 text-slate-300"
+                      } ${selected ? "ring-2 ring-inset ring-cyan-500" : ""}`}
+                    >
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold sm:h-6 sm:w-6 sm:text-[11px] ${
+                          today
+                            ? "bg-cyan-600 text-white"
+                            : cell.inMonth
+                              ? "text-slate-700"
+                              : "text-slate-300"
+                        }`}
+                      >
+                        {cell.date.getDate()}
+                      </span>
 
-            <SidebarItem
-              icon={CalendarIcon}
-              label="Holidays"
-              to="/holidays"
-              onClick={closeMobileSidebar}
-            />
+                      <div className="mt-0.5 flex min-h-1 flex-wrap gap-0.5">
+                        {markers.map((color, index) => (
+                          <span
+                            key={`${cell.key}-${index}`}
+                            className={`h-1 w-1 rounded-full sm:h-1.5 sm:w-1.5 ${color}`}
+                          />
+                        ))}
+                      </div>
 
-            <SidebarItem
-              icon={CalendarDays}
-              label="Calendar"
-              to="/calendar"
-              active
-              onClick={closeMobileSidebar}
-            />
+                      {holidayByDate[cell.key] && (
+                        <span className="hidden max-w-full truncate text-[8px] font-medium text-cyan-700 sm:block">
+                          {holidayByDate[cell.key].name}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
 
-            <SidebarItem
-              icon={Bell}
-              label="Announcements"
-              to="/announcements"
-              onClick={closeMobileSidebar}
-            />
-
-            <SidebarItem
-              icon={UserRound}
-              label="Profile"
-              to="/profile"
-              onClick={closeMobileSidebar}
-            />
-          </nav>
-        </div>
-
-        <div className="border-t border-white/10 p-4">
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-red-500/10 hover:text-red-300"
-          >
-            <LogOut className="h-5 w-5" />
-            Logout
-          </button>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <main className="min-h-screen lg:ml-[270px]">
-        {/* Header */}
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-          <div className="flex h-[88px] items-center justify-between px-5 md:px-8">
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                onClick={() => setMobileSidebarOpen(true)}
-                className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-700 lg:hidden"
-                aria-label="Open menu"
-              >
-                <Menu className="h-6 w-6" />
-              </button>
-
-              <div>
-                <p className="text-sm font-medium text-slate-500">
-                  Employee Portal
+            {/* Selected date details: no scrolling */}
+            <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="shrink-0 border-b border-slate-200 px-3 py-2">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-cyan-700">
+                  Selected Date
                 </p>
 
-                <h1 className="text-xl font-bold text-slate-900 md:text-2xl">
-                  Calendar
-                </h1>
-              </div>
-            </div>
-
-            <div className="hidden items-center gap-3 sm:flex">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
-                <div className="flex items-center gap-2">
-                  <Clock3 className="h-4 w-4 text-cyan-600" />
-
-                  <span className="text-sm font-medium text-slate-600">
-                    {calendarData.today
-                      ? formatLongDate(calendarData.today)
-                      : "Loading..."}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="relative rounded-xl border border-slate-200 bg-white p-3 text-slate-600 transition hover:border-cyan-300 hover:text-cyan-600"
-                aria-label="Notifications"
-              >
-                <Bell className="h-5 w-5" />
-
-                <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-cyan-500" />
-              </button>
-            </div>
-          </div>
-        </header>
-
-        <div className="p-5 md:p-8">
-          {/* Page Intro */}
-          <section className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#071a36] to-[#0b3158] p-6 text-white shadow-lg md:p-8">
-            <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
-              <div>
-                <div className="mb-3 flex items-center gap-2 text-cyan-300">
-                  <CalendarIcon className="h-5 w-5" />
-
-                  <span className="text-sm font-semibold uppercase tracking-wider">
-                    Work Calendar
-                  </span>
-                </div>
-
-                <h2 className="text-2xl font-bold md:text-3xl">
-                  Your Work Calendar
+                <h2 className="mt-0.5 text-sm font-bold sm:text-base">
+                  {formatDate(selectedDate)}
                 </h2>
 
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">
-                  Track your attendance, tasks, leave and company
-                  holidays from one place.
-                </p>
+                {selectedDate === data.today && (
+                  <span className="mt-1 inline-flex rounded-full bg-cyan-50 px-2 py-0.5 text-[9px] font-semibold text-cyan-700">
+                    Today
+                  </span>
+                )}
               </div>
 
-              <button
-                type="button"
-                onClick={goToToday}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
-              >
-                <CalendarCheck2 className="h-4 w-4" />
-                Today
-              </button>
-            </div>
-          </section>
+              <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden p-2">
+                {selectedHoliday && (
+                  <DetailCard
+                    icon={Palmtree}
+                    label="Company Holiday"
+                    title={selectedHoliday.name}
+                    color="border-cyan-100 bg-cyan-50 text-cyan-900"
+                  >
+                    {selectedHoliday.description && (
+                      <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-[10px] leading-4 text-slate-600">
+                        {selectedHoliday.description}
+                      </p>
+                    )}
+                  </DetailCard>
+                )}
 
-          {error && (
-            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-              {error}
-            </div>
-          )}
+                {selectedAttendance && (
+                  <DetailCard
+                    icon={CalendarCheck2}
+                    label="Attendance"
+                    title={selectedAttendance.status || "Recorded"}
+                    color="border-emerald-100 bg-emerald-50 text-emerald-900"
+                  >
+                    <p className="mt-1 text-[10px] text-slate-600">
+                      In: {formatTime(selectedAttendance.check_in)}
+                    </p>
+                    <p className="text-[10px] text-slate-600">
+                      Out: {formatTime(selectedAttendance.check_out)}
+                    </p>
+                  </DetailCard>
+                )}
 
-          {loading ? (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.8fr)]">
-              <div className="h-[650px] animate-pulse rounded-2xl bg-white shadow-sm" />
-              <div className="h-[650px] animate-pulse rounded-2xl bg-white shadow-sm" />
-            </div>
-          ) : (
-            <>
-              {/* Legend */}
-              <div className="mb-5 flex flex-wrap gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <span className="h-3 w-3 rounded-full bg-cyan-500" />
-                  Holiday
-                </div>
+                {selectedLeaves.map((leave, index) => (
+                  <DetailCard
+                    key={leave.id ?? `${leave.from_date}-${index}`}
+                    icon={CalendarDays}
+                    label="Leave"
+                    title={leave.leave_type || "Leave request"}
+                    color="border-amber-100 bg-amber-50 text-amber-900"
+                  >
+                    <p className="mt-1 text-[10px] text-slate-600">
+                      {formatDate(leave.from_date)} – {formatDate(leave.to_date)}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-slate-600">
+                      Status: {leave.status || "Pending"}
+                    </p>
+                  </DetailCard>
+                ))}
 
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <span className="h-3 w-3 rounded-full bg-emerald-500" />
-                  Attendance
-                </div>
+                {selectedTasks.map((task, index) => (
+                  <DetailCard
+                    key={task.id ?? `${task.title}-${index}`}
+                    icon={FileText}
+                    label="Task"
+                    title={task.title || "Assigned task"}
+                    color="border-violet-100 bg-violet-50 text-violet-900"
+                  >
+                    <p className="mt-1 text-[10px] text-slate-600">
+                      {task.status || "Status unavailable"}
+                    </p>
+                  </DetailCard>
+                ))}
 
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <span className="h-3 w-3 rounded-full bg-amber-500" />
-                  Leave
-                </div>
-
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <span className="h-3 w-3 rounded-full bg-violet-500" />
-                  Task
-                </div>
-              </div>
-
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.8fr)]">
-                {/* Calendar */}
-                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-                  {/* Calendar Header */}
-                  <div className="mb-6 flex items-center justify-between gap-3">
-                    <div>
-                      <h2 className="text-xl font-bold text-slate-900">
-                        {monthLabel}
-                      </h2>
-
-                      <p className="mt-1 text-sm text-slate-500">
-                        Select a date to view details
+                {!selectedHoliday &&
+                  !selectedAttendance &&
+                  selectedLeaves.length === 0 &&
+                  selectedTasks.length === 0 && (
+                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center text-center">
+                      <Clock3 className="h-6 w-6 text-slate-300" />
+                      <h3 className="mt-1 text-xs font-semibold text-slate-800">
+                        No activity recorded
+                      </h3>
+                      <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                        No attendance, task, leave or holiday on this date.
                       </p>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={goToPreviousMonth}
-                        className="rounded-xl border border-slate-200 p-2.5 text-slate-600 transition hover:border-cyan-300 hover:text-cyan-600"
-                        aria-label="Previous month"
-                      >
-                        <ChevronLeft className="h-5 w-5" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={goToToday}
-                        className="hidden rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-cyan-300 hover:text-cyan-600 sm:block"
-                      >
-                        Today
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={goToNextMonth}
-                        className="rounded-xl border border-slate-200 p-2.5 text-slate-600 transition hover:border-cyan-300 hover:text-cyan-600"
-                        aria-label="Next month"
-                      >
-                        <ChevronRight className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Week Days */}
-                  <div className="mb-2 grid grid-cols-7">
-                    {[
-                      "Sun",
-                      "Mon",
-                      "Tue",
-                      "Wed",
-                      "Thu",
-                      "Fri",
-                      "Sat",
-                    ].map((day) => (
-                      <div
-                        key={day}
-                        className="py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-400"
-                      >
-                        {day}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Calendar Grid */}
-                  <div className="grid grid-cols-7 overflow-hidden rounded-xl border border-slate-200">
-                    {calendarDays.map((cell) => {
-                      const statuses = getDayStatus(cell.key);
-                      const isToday =
-                        cell.key === calendarData.today;
-                      const isSelected =
-                        cell.key === selectedDate;
-
-                      return (
-                        <button
-                          type="button"
-                          key={cell.key}
-                          onClick={() =>
-                            setSelectedDate(cell.key)
-                          }
-                          className={`relative min-h-[82px] border-b border-r border-slate-100 p-2 text-left transition sm:min-h-[100px] ${
-                            cell.currentMonth
-                              ? "bg-white hover:bg-slate-50"
-                              : "bg-slate-50/70"
-                          } ${
-                            isSelected
-                              ? "ring-2 ring-inset ring-cyan-500"
-                              : ""
-                          }`}
-                        >
-                          <div
-                            className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold ${
-                              isToday
-                                ? "bg-cyan-500 text-white"
-                                : cell.currentMonth
-                                  ? "text-slate-700"
-                                  : "text-slate-300"
-                            }`}
-                          >
-                            {cell.date.getDate()}
-                          </div>
-
-                          <div className="mt-3 flex flex-wrap gap-1">
-                            {statuses.includes("holiday") && (
-                              <span className="h-2 w-2 rounded-full bg-cyan-500" />
-                            )}
-
-                            {statuses.includes("attendance") && (
-                              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                            )}
-
-                            {statuses.includes("leave") && (
-                              <span className="h-2 w-2 rounded-full bg-amber-500" />
-                            )}
-
-                            {statuses.includes("task") && (
-                              <span className="h-2 w-2 rounded-full bg-violet-500" />
-                            )}
-                          </div>
-
-                          {holidayByDate[cell.key] && (
-                            <p className="mt-2 hidden truncate text-[10px] font-medium text-cyan-700 sm:block">
-                              {holidayByDate[cell.key].name}
-                            </p>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-
-                {/* Selected Date */}
-                <aside className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <div className="border-b border-slate-200 p-6">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-cyan-600">
-                      Selected Date
-                    </p>
-
-                    <h2 className="mt-2 text-xl font-bold text-slate-900">
-                      {selectedDateLabel}
-                    </h2>
-                  </div>
-
-                  <div className="space-y-5 p-6">
-                    {/* Holiday */}
-                    {selectedHoliday && (
-                      <div className="rounded-xl border border-cyan-100 bg-cyan-50 p-4">
-                        <div className="flex gap-3">
-                          <div className="rounded-lg bg-cyan-100 p-2 text-cyan-700">
-                            <CalendarIcon className="h-5 w-5" />
-                          </div>
-
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">
-                              Company Holiday
-                            </p>
-
-                            <h3 className="mt-1 font-bold text-slate-900">
-                              {selectedHoliday.name}
-                            </h3>
-
-                            {selectedHoliday.description && (
-                              <p className="mt-1 text-sm leading-5 text-slate-600">
-                                {selectedHoliday.description}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Attendance */}
-                    {selectedAttendance && (
-                      <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
-                        <div className="flex gap-3">
-                          <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700">
-                            <CalendarCheck2 className="h-5 w-5" />
-                          </div>
-
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                              Attendance
-                            </p>
-
-                            <h3 className="mt-1 font-bold text-slate-900">
-                              {selectedAttendance.status}
-                            </h3>
-
-                            <p className="mt-1 text-sm text-slate-600">
-                              Check-in:{" "}
-                              {formatTime(
-                                selectedAttendance.check_in,
-                              )}
-                            </p>
-
-                            <p className="text-sm text-slate-600">
-                              Check-out:{" "}
-                              {formatTime(
-                                selectedAttendance.check_out,
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Leave */}
-                    {selectedLeave && (
-                      <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
-                        <div className="flex gap-3">
-                          <div className="rounded-lg bg-amber-100 p-2 text-amber-700">
-                            <CalendarDays className="h-5 w-5" />
-                          </div>
-
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                              Leave
-                            </p>
-
-                            <h3 className="mt-1 font-bold text-slate-900">
-                              {selectedLeave.leave_type}
-                            </h3>
-
-                            <p className="mt-1 text-sm text-slate-600">
-                              {formatShortDate(
-                                selectedLeave.from_date,
-                              )}{" "}
-                              —{" "}
-                              {formatShortDate(
-                                selectedLeave.to_date,
-                              )}
-                            </p>
-
-                            <span className="mt-2 inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
-                              {selectedLeave.status}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Tasks */}
-                    {selectedTasks.length > 0 && (
-                      <div className="rounded-xl border border-violet-100 bg-violet-50 p-4">
-                        <div className="flex gap-3">
-                          <div className="rounded-lg bg-violet-100 p-2 text-violet-700">
-                            <FileText className="h-5 w-5" />
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">
-                              Tasks
-                            </p>
-
-                            <div className="mt-2 space-y-2">
-                              {selectedTasks.map((task) => (
-                                <div
-                                  key={task.id}
-                                  className="rounded-lg bg-white p-3"
-                                >
-                                  <p className="font-semibold text-slate-800">
-                                    {task.title}
-                                  </p>
-
-                                  <p className="mt-1 text-xs text-slate-500">
-                                    {task.status}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Empty selected date */}
-                    {!selectedHoliday &&
-                      !selectedAttendance &&
-                      !selectedLeave &&
-                      selectedTasks.length === 0 && (
-                        <div className="py-10 text-center">
-                          <CalendarIcon className="mx-auto h-10 w-10 text-slate-200" />
-
-                          <h3 className="mt-4 font-semibold text-slate-700">
-                            No activity recorded
-                          </h3>
-
-                          <p className="mt-1 text-sm leading-5 text-slate-500">
-                            There are no attendance, task, leave or
-                            holiday records for this date.
-                          </p>
-                        </div>
-                      )}
-                  </div>
-                </aside>
+                  )}
               </div>
-            </>
-          )}
-        </div>
-      </main>
+            </aside>
+          </>
+        )}
+      </div>
     </div>
   );
 }
-
-export default Calendar;
