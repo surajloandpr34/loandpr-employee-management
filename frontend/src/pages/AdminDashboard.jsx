@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -11,8 +10,8 @@ import {
   Check,
   CheckCircle2,
   ClipboardList,
-  Clock3,
   LogOut,
+  Megaphone,
   Menu,
   RefreshCw,
   ShieldCheck,
@@ -21,7 +20,9 @@ import {
   X,
 } from "lucide-react";
 
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api"
+).replace(/\/$/, "");
 
 function getAuthToken() {
   return (
@@ -99,13 +100,12 @@ function StatCard({ title, value, icon: Icon, color }) {
           <p className="text-sm font-medium text-slate-500">
             {title}
           </p>
-
           <p className="mt-2 text-3xl font-bold text-slate-900">
             {value ?? 0}
           </p>
         </div>
 
-        <div className={`rounded-xl p-3 ${color}`}>
+        <div className={"rounded-xl p-3 " + color}>
           <Icon size={23} />
         </div>
       </div>
@@ -149,6 +149,10 @@ function AdminDashboard() {
   const [notice, setNotice] = useState("");
   const [processingLeaveId, setProcessingLeaveId] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const [announcementTitle, setAnnouncementTitle] = useState("");
+  const [announcementContent, setAnnouncementContent] = useState("");
+  const [publishingAnnouncement, setPublishingAnnouncement] = useState(false);
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem("access_token");
@@ -223,6 +227,73 @@ function AdminDashboard() {
     loadDashboard();
   }, [loadDashboard]);
 
+  const createAnnouncement = async (event) => {
+    event.preventDefault();
+
+    if (publishingAnnouncement) return;
+
+    const title = announcementTitle.trim();
+    const content = announcementContent.trim();
+
+    if (!title || !content) {
+      setError("Please enter both announcement title and message.");
+      return;
+    }
+
+    const token = getAuthToken();
+
+    if (!token) {
+      handleLogout();
+      return;
+    }
+
+    setPublishingAnnouncement(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/admin/announcements`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            title,
+            content,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.status === 401 || response.status === 403) {
+        handleLogout();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          getErrorMessage(data, "Unable to publish announcement.")
+        );
+      }
+
+      setAnnouncementTitle("");
+      setAnnouncementContent("");
+      setNotice("Announcement published successfully!");
+
+    } catch (err) {
+      setError(
+        err.message || "Unable to publish announcement. Please try again."
+      );
+    } finally {
+      setPublishingAnnouncement(false);
+    }
+  };
+
   const updateLeaveStatus = async (leaveId, status) => {
     if (processingLeaveId !== null) return;
 
@@ -272,10 +343,7 @@ function AdminDashboard() {
         );
       }
 
-      setNotice(
-        `Leave request ${status.toLowerCase()} successfully.`
-      );
-
+      setNotice(`Leave request ${status.toLowerCase()} successfully.`);
       await loadDashboard(true);
     } catch (err) {
       setError(
@@ -410,15 +478,13 @@ function AdminDashboard() {
           </h2>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100 sm:text-base">
-            Manage employees, review leave requests, and monitor
-            daily operations from one place.
+            Manage employees, publish announcements, review leave requests,
+            and monitor daily operations from one place.
           </p>
 
           <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-blue-100">
             <CalendarDays size={17} />
-            <span>
-              {formatDate(dashboard?.today)}
-            </span>
+            <span>{formatDate(dashboard?.today)}</span>
           </div>
         </section>
 
@@ -512,7 +578,7 @@ function AdminDashboard() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <QuickAction
               title="Manage Employees"
               description="View and manage employee records"
@@ -528,6 +594,17 @@ function AdminDashboard() {
             />
 
             <QuickAction
+              title="Create Announcement"
+              description="Publish a message for employees"
+              icon={Megaphone}
+              onClick={() =>
+                document
+                  .getElementById("create-announcement")
+                  ?.scrollIntoView({ behavior: "smooth" })
+              }
+            />
+
+            <QuickAction
               title="Review Leave Requests"
               description="Go to pending leave requests"
               icon={CalendarClock}
@@ -538,6 +615,100 @@ function AdminDashboard() {
               }
             />
           </div>
+        </section>
+
+        {/* Create Announcement */}
+        <section
+          id="create-announcement"
+          className="scroll-mt-24 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+        >
+          <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4 sm:px-6">
+            <div className="rounded-xl bg-blue-50 p-3 text-blue-700">
+              <Megaphone size={23} />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">
+                Create Announcement
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Publish an important message for employees.
+              </p>
+            </div>
+          </div>
+
+          <form
+            onSubmit={createAnnouncement}
+            className="space-y-5 p-5 sm:p-6"
+          >
+            <div>
+              <label
+                htmlFor="announcement-title"
+                className="mb-2 block text-sm font-semibold text-slate-700"
+              >
+                Announcement Title
+              </label>
+              <input
+                id="announcement-title"
+                type="text"
+                value={announcementTitle}
+                onChange={(event) =>
+                  setAnnouncementTitle(event.target.value)
+                }
+                placeholder="Enter announcement title"
+                maxLength={200}
+                required
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="announcement-content"
+                className="mb-2 block text-sm font-semibold text-slate-700"
+              >
+                Announcement Message
+              </label>
+              <textarea
+                id="announcement-content"
+                value={announcementContent}
+                onChange={(event) =>
+                  setAnnouncementContent(event.target.value)
+                }
+                placeholder="Write your announcement message here..."
+                rows={5}
+                maxLength={5000}
+                required
+                className="w-full resize-y rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              <p className="mt-1 text-right text-xs text-slate-400">
+                {announcementContent.length}/5000 characters
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-slate-500">
+                The announcement will be published as active.
+              </p>
+
+              <button
+                type="submit"
+                disabled={publishingAnnouncement}
+                className="flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {publishingAnnouncement ? (
+                  <>
+                    <RefreshCw size={17} className="animate-spin" />
+                    Publishing...
+                  </>
+                ) : (
+                  <>
+                    <Megaphone size={17} />
+                    Publish Announcement
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </section>
 
         {/* Employees */}
@@ -728,14 +899,10 @@ function AdminDashboard() {
           ) : (
             <div className="divide-y divide-slate-100">
               {pendingLeaves.map((leave) => {
-                const isProcessing =
-                  processingLeaveId === leave.id;
+                const isProcessing = processingLeaveId === leave.id;
 
                 return (
-                  <div
-                    key={leave.id}
-                    className="p-5 sm:p-6"
-                  >
+                  <div key={leave.id} className="p-5 sm:p-6">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
