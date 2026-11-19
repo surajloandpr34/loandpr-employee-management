@@ -337,6 +337,7 @@ def get_announcements(
             "id": announcement.id,
             "title": announcement.title,
             "content": announcement.content,
+            "image_data": announcement.image_data,
             "created_by": announcement.created_by,
             "is_active": announcement.is_active,
             "created_at": announcement.created_at,

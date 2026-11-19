@@ -285,6 +285,9 @@ class EmployeeDashboardResponse(BaseModel):
 class AnnouncementCreateRequest(BaseModel):
     title: str = Field(min_length=2, max_length=200)
     content: str = Field(min_length=1, max_length=10000)
+    image_data: str | None = Field(
+        default=None, max_length=3000000
+    )
 
 
 class AnnouncementUpdateRequest(BaseModel):
@@ -297,6 +300,7 @@ class AnnouncementResponse(BaseModel):
     id: int
     title: str
     content: str
+    image_data: str | None = None
     created_by: int | None
     is_active: bool
     created_at: datetime

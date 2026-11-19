@@ -14,6 +14,7 @@ import Calendar from "./pages/Calendar";
 import Contact from "./pages/Contact";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeManagement from "./pages/EmployeeManagement";
+import EmployeeTasks from "./pages/EmployeeTasks";
 import ForgotPassword from "./pages/ForgotPassword";
 import Holidays from "./pages/Holidays";
 import Home from "./pages/Home";
@@ -46,61 +47,101 @@ const INTERNAL_ROUTES = [
 
 function AppLayout() {
   const location = useLocation();
-  const isInternalPage = INTERNAL_ROUTES.includes(location.pathname);
+
+  const isInternalPage = INTERNAL_ROUTES.includes(
+    location.pathname
+  );
 
   return (
     <div className="min-h-screen bg-white">
       {!isInternalPage && <Navbar />}
 
       <Routes>
-        {/* Public website */}
+        {/* PUBLIC WEBSITE */}
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<About />} />
         <Route path="/services" element={<Services />} />
         <Route path="/industries" element={<Industries />} />
-        <Route path="/why-choose-us" element={<WhyChooseUs />} />
+        <Route
+          path="/why-choose-us"
+          element={<WhyChooseUs />}
+        />
         <Route path="/contact" element={<Contact />} />
 
-        {/* Authentication */}
+        {/* AUTHENTICATION */}
         <Route path="/login" element={<Login />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route
+          path="/forgot-password"
+          element={<ForgotPassword />}
+        />
+        <Route
+          path="/reset-password"
+          element={<ResetPassword />}
+        />
 
-        {/* Employee portal */}
+        {/* EMPLOYEE PORTAL */}
         <Route element={<EmployeeLayout />}>
           <Route
             path="/employee-dashboard"
             element={<EmployeeDashboard />}
           />
+
           <Route
             path="/employee-tasks"
-            element={
-              <div className="rounded-xl border border-slate-200 bg-white p-6">
-                <h1 className="text-xl font-bold text-slate-900">
-                  My Tasks
-                </h1>
-                <p className="mt-2 text-sm text-slate-500">
-                  Employee task page component abhi connect karna baaki hai.
-                </p>
-              </div>
-            }
+            element={<EmployeeTasks />}
           />
-          <Route path="/attendance" element={<Attendance />} />
-          <Route path="/leaves" element={<Leaves />} />
-          <Route path="/holidays" element={<Holidays />} />
-          <Route path="/calendar" element={<Calendar />} />
-          <Route path="/announcements" element={<Announcements />} />
-          <Route path="/profile" element={<Profile />} />
+
+          <Route
+            path="/attendance"
+            element={<Attendance />}
+          />
+
+          <Route
+            path="/leaves"
+            element={<Leaves />}
+          />
+
+          <Route
+            path="/holidays"
+            element={<Holidays />}
+          />
+
+          <Route
+            path="/calendar"
+            element={<Calendar />}
+          />
+
+          <Route
+            path="/announcements"
+            element={<Announcements />}
+          />
+
+          <Route
+            path="/profile"
+            element={<Profile />}
+          />
         </Route>
 
-        {/* Admin portal */}
-        <Route path="/admin-dashboard" element={<AdminDashboard />} />
+        {/* ADMIN PORTAL */}
+        <Route
+          path="/admin-dashboard"
+          element={<AdminDashboard />}
+        />
+
         <Route
           path="/employee-management"
           element={<EmployeeManagement />}
         />
-        <Route path="/tasks" element={<AdminTasks />} />
-        <Route path="/admin-tasks" element={<AdminTasks />} />
+
+        <Route
+          path="/tasks"
+          element={<AdminTasks />}
+        />
+
+        <Route
+          path="/admin-tasks"
+          element={<AdminTasks />}
+        />
       </Routes>
 
       {!isInternalPage && <Footer />}

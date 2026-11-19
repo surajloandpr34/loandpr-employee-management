@@ -367,6 +367,10 @@ class Announcement(Base):
         Text, nullable=False
     )
 
+    image_data: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+
     # General announcements can be read by all active employees.
     # Optional targeting can be added later if required.
     created_by: Mapped[int | None] = mapped_column(

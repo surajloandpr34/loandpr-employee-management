@@ -1,4 +1,6 @@
 
+import base64
+import binascii
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -653,6 +655,70 @@ def list_announcements(
     ).all()
 
 
+def validate_announcement_image(
+    image_data: str | None,
+) -> str | None:
+    if not image_data:
+        return None
+
+    allowed = (
+        "data:image/jpeg;base64,",
+        "data:image/png;base64,",
+        "data:image/webp;base64,",
+        "data:image/gif;base64,",
+    )
+
+    prefix = next(
+        (item for item in allowed if image_data.startswith(item)),
+        None,
+    )
+
+    if prefix is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPG, PNG, WebP and GIF photos are allowed.",
+        )
+
+    try:
+        raw = base64.b64decode(
+            image_data[len(prefix):],
+            validate=True,
+        )
+    except (ValueError, binascii.Error):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid photo data.",
+        )
+
+    if not raw or len(raw) > 2 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="Photo must be 2 MB or smaller.",
+        )
+
+    signatures = {
+        "image/jpeg": raw.startswith(bytes.fromhex("ffd8ff")),
+        "image/png": raw.startswith(
+            bytes.fromhex("89504e470d0a1a0a")
+        ),
+        "image/webp": (
+            raw.startswith(b"RIFF")
+            and raw[8:12] == b"WEBP"
+        ),
+        "image/gif": raw.startswith((b"GIF87a", b"GIF89a")),
+    }
+
+    mime = prefix.split(";")[0].split(":")[1]
+
+    if not signatures[mime]:
+        raise HTTPException(
+            status_code=400,
+            detail="Photo content does not match file type.",
+        )
+
+    return image_data
+
+
 @router.post("/announcements")
 def create_announcement(
     request: AnnouncementCreateRequest,
@@ -662,6 +728,9 @@ def create_announcement(
     announcement = Announcement(
         title=request.title.strip(),
         content=request.content.strip(),
+        image_data=validate_announcement_image(
+            request.image_data
+        ),
         created_by=current_user.id,
         is_active=True,
     )

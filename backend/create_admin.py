@@ -7,101 +7,118 @@ from app.models import User
 from app.security import hash_password
 
 
-def main():
-    print()
-    print("=" * 55)
-    print("LoanDPR Creditum - Admin / Manager Account Setup")
-    print("=" * 55)
-    print()
+def create_admin():
+    print("=" * 50)
+    print("LoanDPR Creditum - Admin Account Setup")
+    print("=" * 50)
 
-    full_name = input("Full Name: ").strip()
-    employee_id = input("Employee ID: ").strip()
-    email = input("Email: ").strip().lower()
-    mobile = input("Mobile (optional): ").strip() or None
+    full_name = input(
+        "Admin full name: "
+    ).strip()
 
-    role = input("Role (admin/manager): ").strip().lower()
+    employee_id = input(
+        "Admin ID: "
+    ).strip()
 
-    if role not in {"admin", "manager"}:
-        print()
-        print("ERROR: Role must be either 'admin' or 'manager'.")
+    email = input(
+        "Admin email: "
+    ).strip().lower()
+
+    mobile = input(
+        "Admin mobile (optional): "
+    ).strip()
+
+    password = getpass(
+        "Admin password: "
+    )
+
+    confirm_password = getpass(
+        "Confirm password: "
+    )
+
+    if not full_name:
+        print("ERROR: Full name is required.")
         return
 
-    password = getpass("Password: ")
-    confirm_password = getpass("Confirm Password: ")
+    if not employee_id:
+        print("ERROR: Admin ID is required.")
+        return
 
-    if password != confirm_password:
-        print()
-        print("ERROR: Passwords do not match.")
+    if not email:
+        print("ERROR: Email is required.")
         return
 
     if len(password) < 8:
-        print()
-        print("ERROR: Password must contain at least 8 characters.")
+        print(
+            "ERROR: Password must contain at least 8 characters."
+        )
+        return
+
+    if password != confirm_password:
+        print(
+            "ERROR: Passwords do not match."
+        )
         return
 
     db = SessionLocal()
 
     try:
-        existing_employee = db.scalar(
+        existing_user = db.scalar(
             select(User).where(
-                User.employee_id == employee_id
+                (User.email == email)
+                | (
+                    User.employee_id
+                    == employee_id
+                )
             )
         )
 
-        if existing_employee:
-            print()
+        if existing_user:
             print(
-                f"ERROR: Employee ID '{employee_id}' already exists."
+                "ERROR: An account already exists "
+                "with this email or employee ID."
             )
             return
 
-        existing_email = db.scalar(
-            select(User).where(
-                User.email == email
-            )
-        )
-
-        if existing_email:
-            print()
-            print(
-                f"ERROR: Email '{email}' already exists."
-            )
-            return
-
-        user = User(
+        admin = User(
             full_name=full_name,
             employee_id=employee_id,
             email=email,
-            mobile=mobile,
-            password_hash=hash_password(password),
-            role=role,
-            department="Administration",
+            mobile=mobile or None,
+            password_hash=hash_password(
+                password
+            ),
+            role="admin",
             is_active=True,
         )
 
-        db.add(user)
+        db.add(admin)
         db.commit()
-        db.refresh(user)
+        db.refresh(admin)
 
         print()
-        print("=" * 55)
-        print("ACCOUNT CREATED SUCCESSFULLY")
-        print("=" * 55)
-        print(f"Name       : {user.full_name}")
-        print(f"Employee ID: {user.employee_id}")
-        print(f"Email      : {user.email}")
-        print(f"Role       : {user.role}")
-        print(f"Status     : {'Active' if user.is_active else 'Inactive'}")
-        print("=" * 55)
-        print()
-        print("You can now use Admin / Manager Login.")
-        print()
+        print("=" * 50)
+        print("ADMIN ACCOUNT CREATED SUCCESSFULLY")
+        print("=" * 50)
+        print(
+            f"Name       : {admin.full_name}"
+        )
+        print(
+            f"Admin ID   : {admin.employee_id}"
+        )
+        print(
+            f"Email      : {admin.email}"
+        )
+        print(
+            f"Role       : {admin.role}"
+        )
+        print("=" * 50)
 
     except Exception as error:
         db.rollback()
 
         print()
-        print("ERROR: Account could not be created.")
+        print("ERROR: Admin creation failed.")
         print(error)
 
     finally:
@@ -109,4 +126,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    create_admin()
