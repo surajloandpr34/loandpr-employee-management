@@ -92,11 +92,28 @@ def overview(current_user: User = Depends(require_admin), db: Session = Depends(
     activity = db.scalars(select(ActivityLog).order_by(ActivityLog.created_at.desc()).limit(20)).all()
     events = db.scalars(select(CalendarEvent).order_by(CalendarEvent.event_date, CalendarEvent.start_time, CalendarEvent.id)).all()
 
+    attendance_review = {"Late check-ins today": [], "Missing check-outs yesterday": []}
     weekly = []
     for offset in range(6, -1, -1):
         day = today - timedelta(days=offset)
         records = db.scalars(select(Attendance).where(Attendance.attendance_date == day)).all()
         weekly.append({"date": day.isoformat(), "present": len({r.employee_id for r in records if r.check_in})})
+
+        if offset in (0, 1):
+            for record in records:
+                if not record.check_in or record.employee_id not in names:
+                    continue
+                if offset == 0 and record.check_in.time() > time(9, 35):
+                    group = "Late check-ins today"
+                elif offset == 1 and record.check_out is None:
+                    group = "Missing check-outs yesterday"
+                else:
+                    continue
+                attendance_review[group].append({
+                    "id": record.id,
+                    "name": names[record.employee_id],
+                    "check_in": record.check_in.strftime("%I:%M:%S %p"),
+                })
 
     birthdays = [
         {"id": e.id, "name": e.full_name, "date": day_value(e.date_of_birth), "department": e.department}
@@ -122,6 +139,7 @@ def overview(current_user: User = Depends(require_admin), db: Session = Depends(
 
     return {
         "today": today.isoformat(),
+        "attendance_review": attendance_review,
         "stats": {"total_employees": len(employees), "active_employees": len(active),
                   "present_today": len(attendance_ids.intersection({e.id for e in active})),
                   "not_checked_in": len(active) - len(attendance_ids.intersection({e.id for e in active})),
