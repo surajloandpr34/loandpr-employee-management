@@ -12,7 +12,16 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+// Works with:
+// VITE_API_BASE_URL=https://your-backend.onrender.com/api
+// Also supports a URL without /api.
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://127.0.0.1:8000/api"
+)
+  .trim()
+  .replace(/\/+$/, "")
+  .replace(/\/api$/, "");
 
 export default function Login() {
   const navigate = useNavigate();
@@ -37,30 +46,42 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          login_id: loginId.trim(),
-          password,
-        }),
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/auth/login`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            login_id: loginId.trim(),
+            password,
+          }),
+        }
+      );
 
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.detail || "Invalid login credentials.");
+        throw new Error(
+          typeof data.detail === "string"
+            ? data.detail
+            : "Invalid login credentials."
+        );
       }
 
       const user = data.user;
 
       if (!user || !data.access_token) {
-        throw new Error("Login response is incomplete. Please contact admin.");
+        throw new Error(
+          "Login response is incomplete. Please contact admin."
+        );
       }
 
-      if (loginType === "employee" && user.role !== "employee") {
+      if (
+        loginType === "employee" &&
+        user.role !== "employee"
+      ) {
         throw new Error(
           "This is not an Employee account. Select Admin / Manager login."
         );
@@ -83,19 +104,35 @@ export default function Login() {
         ? window.sessionStorage
         : window.localStorage;
 
-      activeStorage.setItem("access_token", data.access_token);
-      activeStorage.setItem("user", JSON.stringify(user));
+      activeStorage.setItem(
+        "access_token",
+        data.access_token
+      );
+
+      activeStorage.setItem(
+        "user",
+        JSON.stringify(user)
+      );
 
       otherStorage.removeItem("access_token");
       otherStorage.removeItem("user");
 
       if (["admin", "manager"].includes(user.role)) {
-        navigate("/admin-dashboard");
+        navigate("/admin-dashboard", { replace: true });
       } else {
-        navigate("/employee-dashboard");
+        navigate("/employee-dashboard", { replace: true });
       }
     } catch (err) {
-      setError(err.message || "Unable to sign in. Please try again.");
+      if (err instanceof TypeError) {
+        setError(
+          "Unable to connect to the server. Please check the backend URL and try again."
+        );
+      } else {
+        setError(
+          err.message ||
+          "Unable to sign in. Please try again."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -226,13 +263,17 @@ export default function Login() {
           color: #10233d;
           font-size: 14px;
           outline: none;
-          transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+          transition:
+            border-color 0.2s,
+            box-shadow 0.2s,
+            background 0.2s;
         }
 
         .login-input:focus {
           border-color: #3785e9;
           background: #ffffff;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.13);
+          box-shadow:
+            0 0 0 3px rgba(59, 130, 246, 0.13);
         }
 
         .login-submit {
@@ -244,12 +285,16 @@ export default function Login() {
           gap: 10px;
           border: 0;
           border-radius: 12px;
-          background: linear-gradient(100deg, #0756c9, #0875ee);
+          background:
+            linear-gradient(100deg, #0756c9, #0875ee);
           color: white;
           font-weight: 700;
           cursor: pointer;
-          box-shadow: 0 5px 12px rgba(0, 87, 200, 0.20);
-          transition: filter 0.2s, transform 0.2s;
+          box-shadow:
+            0 5px 12px rgba(0, 87, 200, 0.20);
+          transition:
+            filter 0.2s,
+            transform 0.2s;
         }
 
         .login-submit:hover {
@@ -360,7 +405,7 @@ export default function Login() {
       `}</style>
 
       <div className="login-card">
-        {/* Left side: corporate background and welcome text */}
+        {/* Left: Welcome section */}
         <section className="login-visual">
           <div>
             <div className="inline-flex rounded-xl bg-white p-2.5 shadow-xl">
@@ -384,18 +429,21 @@ export default function Login() {
               </h1>
 
               <p className="mt-5 text-sm leading-7 text-blue-50 sm:text-base">
-                Securely manage attendance, daily work, tasks, leaves,
-                holidays and employee information from one place.
+                Securely manage attendance, daily work,
+                tasks, leaves, holidays and employee
+                information from one place.
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3 rounded-xl border border-white/20 bg-white/10 p-3 backdrop-blur-md">
             <ShieldCheck className="h-6 w-6 shrink-0 text-sky-300" />
+
             <div>
               <p className="text-sm font-semibold">
                 Secure company access
               </p>
+
               <p className="mt-1 text-xs text-blue-100">
                 Your workplace, all in one place
               </p>
@@ -403,7 +451,7 @@ export default function Login() {
           </div>
         </section>
 
-        {/* Right side: sign-in form */}
+        {/* Right: Login form */}
         <section className="login-form-panel">
           <div className="login-form-inner">
             <div className="login-mobile-logo">
@@ -482,7 +530,9 @@ export default function Login() {
                     id="loginId"
                     type="text"
                     value={loginId}
-                    onChange={(event) => setLoginId(event.target.value)}
+                    onChange={(event) =>
+                      setLoginId(event.target.value)
+                    }
                     placeholder={
                       loginType === "employee"
                         ? "Enter Employee ID or Email"
@@ -519,7 +569,9 @@ export default function Login() {
                     id="password"
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={(event) => setPassword(event.target.value)}
+                    onChange={(event) =>
+                      setPassword(event.target.value)
+                    }
                     placeholder="Enter your password"
                     autoComplete="current-password"
                     required
@@ -528,8 +580,14 @@ export default function Login() {
 
                   <button
                     type="button"
-                    onClick={() => setShowPassword((current) => !current)}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    onClick={() =>
+                      setShowPassword((current) => !current)
+                    }
+                    aria-label={
+                      showPassword
+                        ? "Hide password"
+                        : "Show password"
+                    }
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-blue-700"
                   >
                     {showPassword ? (
@@ -545,9 +603,12 @@ export default function Login() {
                 <input
                   type="checkbox"
                   checked={rememberMe}
-                  onChange={(event) => setRememberMe(event.target.checked)}
+                  onChange={(event) =>
+                    setRememberMe(event.target.checked)
+                  }
                   className="h-4 w-4 rounded accent-blue-600"
                 />
+
                 <span className="text-sm text-slate-600">
                   Remember me on this device
                 </span>
@@ -568,14 +629,19 @@ export default function Login() {
                 className="login-submit"
               >
                 {loading ? "Signing in..." : "Sign In"}
-                {!loading && <ArrowRight className="h-5 w-5" />}
+
+                {!loading && (
+                  <ArrowRight className="h-5 w-5" />
+                )}
               </button>
             </form>
 
             <div className="login-support mt-5 flex items-start gap-3 border-t border-slate-200 pt-4 text-xs leading-5 text-slate-500">
               <Mail className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+
               <p>
-                For account access issues, contact your company administrator.
+                For account access issues, contact
+                your company administrator.
               </p>
             </div>
           </div>
